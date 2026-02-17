@@ -487,7 +487,37 @@ def initialize_fund_code_cache():
 
 def fetch_fund_name(code):
     global FUND_CODE_CACHE
-    return FUND_CODE_CACHE.get(code)
+    
+    if code in FUND_CODE_CACHE:
+        return FUND_CODE_CACHE[code]
+    
+    try:
+        req = urllib.request.Request(
+            f'https://fundgz.1234567.com.cn/js/{code}.js',
+            headers={
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': '*/*',
+                'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+                'Referer': 'https://fund.eastmoney.com/'
+            }
+        )
+        
+        with urllib.request.urlopen(req, timeout=10) as response:
+            content = response.read().decode('utf-8', errors='ignore')
+            
+            match = re.search(r'jsonpgz\s*\(\s*(\{.*?\})\s*\)', content)
+            if match:
+                try:
+                    data = json.loads(match.group(1))
+                    if data and data.get('name'):
+                        FUND_CODE_CACHE[code] = data.get('name')
+                        return data.get('name')
+                except json.JSONDecodeError:
+                    pass
+    except Exception as e:
+        print(f"Error fetching fund name for {code}: {e}")
+    
+    return None
 
 def fetch_dividend_date(code):
     urls_to_try = [

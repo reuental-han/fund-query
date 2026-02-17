@@ -488,7 +488,7 @@ async function addFund() {
     } catch (err) {
         addFundBtn.disabled = false;
         addFundBtn.textContent = '添加';
-        showAddFundError('基金代码不存在，请检查后重试');
+        showAddFundError('基金代码不存在或网络异常，请检查后重试');
         return;
     }
     
