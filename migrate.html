@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>数据迁移工具</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            border-radius: 16px;
+            padding: 40px;
+            max-width: 800px;
+            width: 100%;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 28px;
+        }
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 12px;
+        }
+        .section h2 {
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 18px;
+        }
+        .data-preview {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 13px;
+            max-height: 300px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        .stat-value {
+            font-size: 36px;
+            font-weight: bold;
+            color: #667eea;
+        }
+        .stat-label {
+            color: #666;
+            margin-top: 5px;
+        }
+        .btn {
+            display: block;
+            width: 100%;
+            padding: 15px;
+            font-size: 18px;
+            font-weight: 600;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-bottom: 15px;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+        }
+        .btn-primary:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #333;
+        }
+        .btn-secondary:hover {
+            background: #e0e0e0;
+        }
+        .status {
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            text-align: center;
+            font-weight: 500;
+        }
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+        .hidden {
+            display: none;
+        }
+        .comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+        .comparison-table th, .comparison-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        .comparison-table th {
+            background: #667eea;
+            color: white;
+        }
+        .comparison-table tr:hover {
+            background: #f5f5f5;
+        }
+        .match {
+            color: #28a745;
+            font-weight: bold;
+        }
+        .mismatch {
+            color: #dc3545;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📦 数据迁移工具</h1>
+        <p style="text-align: center; color: #666; margin-bottom: 30px;">
+            将 funds.json 中的基金数据迁移到浏览器本地存储
+        </p>
+
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-value" id="sourceCount">-</div>
+                <div class="stat-label">源数据记录数</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="targetCount">-</div>
+                <div class="stat-label">目标存储记录数</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="statusIcon">-</div>
+                <div class="stat-label">迁移状态</div>
+            </div>
+        </div>
+
+        <div id="statusBox" class="status info hidden"></div>
+
+        <div class="section">
+            <h2>📋 源数据预览 (funds.json)</h2>
+            <div class="data-preview" id="sourcePreview">加载中...</div>
+        </div>
+
+        <div class="section">
+            <h2>💾 目标存储预览 (localStorage)</h2>
+            <div class="data-preview" id="targetPreview">尚未迁移</div>
+        </div>
+
+        <button id="migrateBtn" class="btn btn-primary" onclick="executeMigration()">
+            🚀 执行数据迁移
+        </button>
+
+        <button id="verifyBtn" class="btn btn-secondary hidden" onclick="verifyMigration()">
+            ✅ 验证迁移结果
+        </button>
+
+        <button class="btn btn-secondary" onclick="window.location.href='index.html'">
+            ← 返回主页
+        </button>
+
+        <div id="comparisonSection" class="section hidden">
+            <h2>📊 迁移结果对比</h2>
+            <table class="comparison-table">
+                <thead>
+                    <tr>
+                        <th>基金代码</th>
+                        <th>份额 (源)</th>
+                        <th>份额 (目标)</th>
+                        <th>状态</th>
+                    </tr>
+                </thead>
+                <tbody id="comparisonBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        const STORAGE_KEY = 'fund_query_data';
+        const SOURCE_DATA = [
+            {"code": "485011", "shares": 8842.69},
+            {"code": "007194", "shares": 104336.62},
+            {"code": "000827", "shares": 36471.67},
+            {"code": "270028", "shares": 12290.61},
+            {"code": "006105", "shares": 80094.75},
+            {"code": "000043", "shares": 4730.36},
+            {"code": "007280", "shares": 6980.08},
+            {"code": "022688", "shares": 48780.49},
+            {"code": "022670", "shares": 47469.85},
+            {"code": "005661", "shares": 4609.03},
+            {"code": "240022", "shares": 4012.03},
+            {"code": "006980", "shares": 34631.21},
+            {"code": "675091", "shares": 19499.98},
+            {"code": "010353", "shares": 51953.11},
+            {"code": "006210", "shares": 6404.23}
+        ];
+
+        function showStatus(message, type) {
+            const statusBox = document.getElementById('statusBox');
+            statusBox.textContent = message;
+            statusBox.className = 'status ' + type;
+            statusBox.classList.remove('hidden');
+        }
+
+        function init() {
+            document.getElementById('sourceCount').textContent = SOURCE_DATA.length;
+            document.getElementById('sourcePreview').textContent = JSON.stringify(SOURCE_DATA, null, 2);
+            
+            const existingData = localStorage.getItem(STORAGE_KEY);
+            if (existingData) {
+                const parsed = JSON.parse(existingData);
+                document.getElementById('targetCount').textContent = parsed.length;
+                document.getElementById('targetPreview').textContent = JSON.stringify(parsed, null, 2);
+            } else {
+                document.getElementById('targetCount').textContent = '0';
+                document.getElementById('targetPreview').textContent = '(空)';
+            }
+        }
+
+        function executeMigration() {
+            const btn = document.getElementById('migrateBtn');
+            btn.disabled = true;
+            btn.textContent = '⏳ 迁移中...';
+
+            try {
+                const existingData = localStorage.getItem(STORAGE_KEY);
+                if (existingData) {
+                    const parsed = JSON.parse(existingData);
+                    if (parsed.length > 0) {
+                        if (!confirm('目标存储中已有 ' + parsed.length + ' 条记录，是否覆盖？')) {
+                            btn.disabled = false;
+                            btn.textContent = '🚀 执行数据迁移';
+                            showStatus('迁移已取消', 'error');
+                            return;
+                        }
+                    }
+                }
+
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(SOURCE_DATA));
+
+                const targetPreview = document.getElementById('targetPreview');
+                targetPreview.textContent = JSON.stringify(SOURCE_DATA, null, 2);
+
+                document.getElementById('targetCount').textContent = SOURCE_DATA.length;
+                document.getElementById('statusIcon').textContent = '✅';
+                document.getElementById('statusIcon').style.color = '#28a745';
+
+                showStatus('迁移成功！已将 ' + SOURCE_DATA.length + ' 条基金记录保存到本地存储', 'success');
+
+                document.getElementById('verifyBtn').classList.remove('hidden');
+                btn.textContent = '✅ 迁移完成';
+
+            } catch (e) {
+                showStatus('迁移失败：' + e.message, 'error');
+                btn.disabled = false;
+                btn.textContent = '🚀 执行数据迁移';
+            }
+        }
+
+        function verifyMigration() {
+            const storedData = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+            const comparisonBody = document.getElementById('comparisonBody');
+            comparisonBody.innerHTML = '';
+
+            let allMatch = true;
+
+            SOURCE_DATA.forEach((sourceItem, index) => {
+                const targetItem = storedData.find(t => t.code === sourceItem.code);
+                const row = document.createElement('tr');
+
+                const codeCell = document.createElement('td');
+                codeCell.textContent = sourceItem.code;
+
+                const sourceSharesCell = document.createElement('td');
+                sourceSharesCell.textContent = sourceItem.shares;
+
+                const targetSharesCell = document.createElement('td');
+                const statusCell = document.createElement('td');
+
+                if (targetItem && targetItem.shares === sourceItem.shares) {
+                    targetSharesCell.textContent = targetItem.shares;
+                    statusCell.innerHTML = '<span class="match">✅ 匹配</span>';
+                } else {
+                    allMatch = false;
+                    targetSharesCell.textContent = targetItem ? targetItem.shares : '(不存在)';
+                    statusCell.innerHTML = '<span class="mismatch">❌ 不匹配</span>';
+                }
+
+                row.appendChild(codeCell);
+                row.appendChild(sourceSharesCell);
+                row.appendChild(targetSharesCell);
+                row.appendChild(statusCell);
+                comparisonBody.appendChild(row);
+            });
+
+            if (storedData.length !== SOURCE_DATA.length) {
+                allMatch = false;
+                const row = document.createElement('tr');
+                row.innerHTML = '<td colspan="4" class="mismatch">记录数量不匹配：源 ' + SOURCE_DATA.length + ' 条，目标 ' + storedData.length + ' 条</td>';
+                comparisonBody.appendChild(row);
+            }
+
+            document.getElementById('comparisonSection').classList.remove('hidden');
+
+            if (allMatch) {
+                showStatus('验证通过！所有 ' + SOURCE_DATA.length + ' 条记录完全匹配', 'success');
+            } else {
+                showStatus('验证发现差异，请检查对比表', 'error');
+            }
+        }
+
+        init();
+    </script>
+</body>
+</html>

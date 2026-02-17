@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>基金查询系统</title>
+    <link rel="stylesheet" href="style.css?v=20260212l">
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📊 基金查询系统</h1>
+            <p class="subtitle">实时查询基金净值、涨跌幅等信息</p>
+        </header>
+
+        <div class="my-funds-section">
+            <div class="section-header">
+                <h3>我的基金</h3>
+                <button id="refreshAllBtn" class="refresh-btn" title="刷新全部">🔄 刷新</button>
+            </div>
+            <div class="add-fund-box">
+                <input type="text" id="addFundInput" placeholder="输入基金代码添加到列表" maxlength="6">
+                <button id="addFundBtn">添加</button>
+                <button id="exportBtn" class="export-btn">导出</button>
+            </div>
+            <div id="fundListLoading" class="fund-list-loading hidden">
+                <div class="spinner-small"></div>
+                <span>正在加载基金数据...</span>
+            </div>
+            <div id="fundListHeader" class="fund-list-header">
+                <div class="fund-header-item">基金名称</div>
+                <div class="fund-header-item">基金代码</div>
+                <div class="fund-header-item">净值日期</div>
+                <div class="fund-header-item">单位净值</div>
+                <div class="fund-header-item">基金份额</div>
+                <div class="fund-header-item">基金市值</div>
+                <div class="fund-header-item">最近分红</div>
+                <div class="fund-header-item">操作</div>
+            </div>
+            <div id="fundList" class="fund-list">
+                <div class="empty-tip">暂无保存的基金，请添加基金代码</div>
+            </div>
+        </div>
+
+        <div class="search-section">
+            <div class="section-header">
+                <h3>基金查询</h3>
+            </div>
+            <div class="search-box">
+                <input type="text" id="fundInput" placeholder="输入基金代码（如：000001）" maxlength="6">
+                <button id="searchBtn">查询</button>
+            </div>
+            <div class="quick-search">
+                <span>热门基金：</span>
+                <button class="quick-btn" data-code="000001">华夏成长</button>
+                <button class="quick-btn" data-code="110022">易方达消费</button>
+                <button class="quick-btn" data-code="161725">招商中证白酒</button>
+                <button class="quick-btn" data-code="519778">交银定期支付双息平衡</button>
+            </div>
+        </div>
+
+        <div id="loading" class="loading hidden">
+            <div class="spinner"></div>
+            <p>正在查询中...</p>
+        </div>
+
+        <div id="error" class="error hidden"></div>
+
+        <div id="result" class="result hidden">
+            <div class="fund-header">
+                <div class="fund-name">
+                    <h2 id="fundName">-</h2>
+                    <span id="fundCode" class="fund-code">-</span>
+                </div>
+                <div class="fund-type" id="fundType">-</div>
+            </div>
+
+            <div class="fund-stats">
+                <div class="stat-card">
+                    <div class="stat-label">最新净值</div>
+                    <div class="stat-value" id="netValue">-</div>
+                    <div class="stat-date" id="netValueDate">-</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">日涨跌幅</div>
+                    <div class="stat-value" id="dayGrowth">-</div>
+                    <div class="stat-change" id="dayChange">-</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">近一周</div>
+                    <div class="stat-value" id="weekGrowth">-</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">近一月</div>
+                    <div class="stat-value" id="monthGrowth">-</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">近三月</div>
+                    <div class="stat-value" id="threeMonthGrowth">-</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">近一年</div>
+                    <div class="stat-value" id="yearGrowth">-</div>
+                </div>
+            </div>
+
+            <div class="chart-section">
+                <h3>净值走势</h3>
+                <div class="chart-controls">
+                    <button class="chart-btn active" data-range="1m">近1月</button>
+                    <button class="chart-btn" data-range="3m">近3月</button>
+                    <button class="chart-btn" data-range="6m">近6月</button>
+                    <button class="chart-btn" data-range="1y">近1年</button>
+                </div>
+                <div id="chart"></div>
+            </div>
+
+            <div class="fund-info">
+                <h3>基金详情</h3>
+                <div class="info-grid">
+                    <div class="info-item">
+                        <span class="info-label">基金经理</span>
+                        <span class="info-value" id="manager">-</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">基金规模</span>
+                        <span class="info-value" id="scale">-</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">成立日期</span>
+                        <span class="info-value" id="establishDate">-</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">基金公司</span>
+                        <span class="info-value" id="company">-</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <footer>
+            <p>数据来源：天天基金网 | 仅供参考，不构成投资建议</p>
+        </footer>
+    </div>
+
+    <script src="app.js?v=20260212n"></script>
+</body>
+</html>
