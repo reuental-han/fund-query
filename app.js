@@ -16,6 +16,7 @@ const fundList = document.getElementById('fundList');
 const fundListLoading = document.getElementById('fundListLoading');
 const fundListHeader = document.getElementById('fundListHeader');
 const refreshAllBtn = document.getElementById('refreshAllBtn');
+const addFundStatus = document.getElementById('addFundStatus');
 
 function getStoredFunds() {
     try {
@@ -460,56 +461,128 @@ async function exportFunds() {
 }
 
 async function addFund() {
-    const code = addFundInput.value.trim();
+    const input = addFundInput.value.trim();
     
-    if (!code || code.length !== 6 || !/^\d+$/.test(code)) {
-        showAddFundError('请输入正确的6位基金代码');
+    if (!input) {
+        showAddFundStatus('error', '请输入基金代码');
+        return;
+    }
+    
+    const normalizedInput = input.replace(/，/g, ',');
+    const codeList = normalizedInput.split(',')
+        .map(c => c.trim())
+        .filter(c => c.length > 0);
+    
+    const invalidCodes = codeList.filter(c => !/^\d{6}$/.test(c));
+    if (invalidCodes.length > 0) {
+        showAddFundStatus('error', `以下代码格式无效（需为6位数字）：${invalidCodes.join(', ')}`);
+        return;
+    }
+    
+    if (codeList.length > 50) {
+        showAddFundStatus('error', `单次最多添加50支基金，当前输入了${codeList.length}支`);
         return;
     }
     
     addFundBtn.disabled = true;
-    addFundBtn.textContent = '验证中...';
-    
-    try {
-        const response = await fetch(`${API_BASE}/api/fundinfo/${code}`, {
-            method: 'GET',
-            headers: { 'Accept': 'application/json' }
-        });
-        
-        if (!response.ok) {
-            throw new Error('验证失败');
-        }
-        
-        const data = await response.json();
-        
-        if (!data.name && !data.netValue) {
-            throw new Error('基金不存在');
-        }
-    } catch (err) {
-        addFundBtn.disabled = false;
-        addFundBtn.textContent = '添加';
-        showAddFundError('基金代码不存在或网络异常，请检查后重试');
-        return;
-    }
+    addFundBtn.textContent = `验证中 (0/${codeList.length})...`;
+    hideAddFundStatus();
     
     const funds = getStoredFunds();
-    const existingCodes = funds.map(f => typeof f === 'string' ? f : f.code);
+    const existingCodes = new Set(funds.map(f => typeof f === 'string' ? f : f.code));
     
-    if (existingCodes.includes(code)) {
-        addFundBtn.disabled = false;
-        addFundBtn.textContent = '添加';
-        showAddFundError('该基金已存在');
-        return;
+    const validCodes = [];
+    const duplicateCodes = [];
+    const notFoundCodes = [];
+    const errorCodes = [];
+    
+    for (let i = 0; i < codeList.length; i++) {
+        const code = codeList[i];
+        addFundBtn.textContent = `验证中 (${i + 1}/${codeList.length})...`;
+        
+        if (existingCodes.has(code)) {
+            duplicateCodes.push(code);
+            continue;
+        }
+        
+        try {
+            const response = await fetch(`${API_BASE}/api/fundinfo/${code}`, {
+                method: 'GET',
+                headers: { 'Accept': 'application/json' }
+            });
+            
+            if (!response.ok) {
+                notFoundCodes.push(code);
+                continue;
+            }
+            
+            const data = await response.json();
+            
+            if (data.name || data.netValue) {
+                validCodes.push(code);
+                existingCodes.add(code);
+            } else {
+                notFoundCodes.push(code);
+            }
+        } catch (err) {
+            errorCodes.push(code);
+        }
     }
     
-    funds.push({ code: code, shares: null });
-    saveStoredFunds(funds);
+    if (validCodes.length > 0) {
+        const newFunds = validCodes.map(code => ({ code: code, shares: null }));
+        saveStoredFunds([...funds, ...newFunds]);
+    }
     
     addFundBtn.disabled = false;
     addFundBtn.textContent = '添加';
-    showAddFundSuccess('添加成功！');
-    addFundInput.value = '';
-    loadSavedFunds();
+    
+    let statusType = 'success';
+    let statusMessages = [];
+    
+    if (validCodes.length > 0) {
+        statusMessages.push(`✅ 成功添加 ${validCodes.length} 支基金`);
+    }
+    
+    if (duplicateCodes.length > 0) {
+        statusType = validCodes.length > 0 ? 'warning' : 'error';
+        statusMessages.push(`⚠️ ${duplicateCodes.length} 支已存在：${duplicateCodes.join(', ')}`);
+    }
+    
+    if (notFoundCodes.length > 0) {
+        statusType = validCodes.length > 0 ? 'warning' : 'error';
+        statusMessages.push(`❌ ${notFoundCodes.length} 支不存在：${notFoundCodes.join(', ')}`);
+    }
+    
+    if (errorCodes.length > 0) {
+        statusType = validCodes.length > 0 ? 'warning' : 'error';
+        statusMessages.push(`⚠️ ${errorCodes.length} 支验证失败：${errorCodes.join(', ')}`);
+    }
+    
+    showAddFundStatus(statusType, statusMessages.join('<br>'));
+    
+    if (validCodes.length > 0) {
+        addFundInput.value = '';
+        loadSavedFunds();
+    }
+}
+
+function showAddFundStatus(type, message) {
+    addFundStatus.className = `add-fund-status ${type}`;
+    addFundStatus.innerHTML = message;
+    addFundStatus.classList.remove('hidden');
+}
+
+function hideAddFundStatus() {
+    addFundStatus.classList.add('hidden');
+}
+
+function showAddFundError(message) {
+    showAddFundStatus('error', message);
+}
+
+function showAddFundSuccess(message) {
+    showAddFundStatus('success', message);
 }
 
 async function removeFund(code) {

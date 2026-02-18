@@ -114,6 +114,47 @@ header h1 {
     box-shadow: 0 5px 20px rgba(56, 161, 105, 0.4) !important;
 }
 
+.add-fund-status {
+    padding: 15px 20px;
+    margin-bottom: 15px;
+    border-radius: 10px;
+    font-size: 0.9rem;
+    line-height: 1.6;
+}
+
+.add-fund-status.success {
+    background: #f0fff4;
+    color: #38a169;
+    border: 1px solid #9ae6b4;
+}
+
+.add-fund-status.error {
+    background: #fff5f5;
+    color: #c53030;
+    border: 1px solid #feb2b2;
+}
+
+.add-fund-status.warning {
+    background: #fffaf0;
+    color: #c05621;
+    border: 1px solid #fbd38d;
+}
+
+.add-fund-status .status-title {
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.add-fund-status .status-detail {
+    margin-top: 5px;
+    padding-left: 15px;
+}
+
+.add-fund-status .code-list {
+    color: inherit;
+    font-family: monospace;
+}
+
 .fund-list-loading {
     display: flex;
     align-items: center;

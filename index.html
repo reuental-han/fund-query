@@ -20,10 +20,11 @@
                 <button id="refreshAllBtn" class="refresh-btn" title="刷新全部">🔄 刷新</button>
             </div>
             <div class="add-fund-box">
-                <input type="text" id="addFundInput" placeholder="输入基金代码添加到列表" maxlength="6">
+                <input type="text" id="addFundInput" placeholder="输入基金代码，多个用逗号分隔（如：000001,110022）" maxlength="400">
                 <button id="addFundBtn">添加</button>
                 <button id="exportBtn" class="export-btn">导出</button>
             </div>
+            <div id="addFundStatus" class="add-fund-status hidden"></div>
             <div id="fundListLoading" class="fund-list-loading hidden">
                 <div class="spinner-small"></div>
                 <span>正在加载基金数据...</span>
