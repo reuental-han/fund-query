@@ -404,7 +404,7 @@ async function exportFunds() {
     const items = fundList.querySelectorAll('.fund-item');
     
     if (items.length === 0) {
-        alert('没有基金数据可导出');
+        showAddFundStatus('error', '没有基金数据可导出');
         return;
     }
     
@@ -435,7 +435,8 @@ async function exportFunds() {
     });
     
     exportBtn.disabled = true;
-    exportBtn.textContent = '导出中...';
+    exportBtn.textContent = '准备中...';
+    showAddFundStatus('info', '正在生成Excel文件，请稍候...');
     
     try {
         const response = await fetch(`${API_BASE}/api/export`, {
@@ -444,16 +445,35 @@ async function exportFunds() {
             body: JSON.stringify({ funds: fundsData })
         });
         
-        const result = await response.json();
-        
-        if (result.success) {
-            alert(`导出成功！文件已保存为: ${result.filename}`);
-        } else {
-            alert('导出失败：' + (result.error || '未知错误'));
+        if (!response.ok) {
+            throw new Error('导出失败');
         }
+        
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        
+        const contentDisposition = response.headers.get('Content-Disposition');
+        let filename = '基金列表.xlsx';
+        if (contentDisposition) {
+            const filenameMatch = contentDisposition.match(/filename\*?=['"]?(?:UTF-\d['"]*)?([^;\r\n"']*)['"]?;?/i);
+            if (filenameMatch && filenameMatch[1]) {
+                filename = decodeURIComponent(filenameMatch[1]);
+            }
+        }
+        
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        
+        showAddFundStatus('success', `✅ 导出成功！文件已下载（共 ${fundsData.length} 支基金）`);
+        
     } catch (err) {
         console.warn('Error exporting funds:', err);
-        alert('导出失败，请重试');
+        showAddFundStatus('error', '导出失败，请重试');
     }
     
     exportBtn.disabled = false;

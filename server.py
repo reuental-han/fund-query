@@ -3,6 +3,7 @@ from flask_cors import CORS
 import json
 import os
 import re
+import io
 import urllib.request
 import urllib.error
 from datetime import datetime
@@ -237,13 +238,19 @@ def export_funds():
     ws.column_dimensions['F'].width = 14
     ws.column_dimensions['G'].width = 12
     
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     filename = f'基金列表_{timestamp}.xlsx'
-    filepath = os.path.join(BASE_DIR, filename)
     
-    wb.save(filepath)
-    
-    return jsonify({'success': True, 'filename': filename})
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=filename
+    )
 
 @app.route('/api/dividend/<code>', methods=['GET'])
 def get_dividend(code):
