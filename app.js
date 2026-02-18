@@ -3,6 +3,7 @@ let chart = null;
 let draggedItem = null;
 
 const STORAGE_KEY = 'fund_query_data';
+const RECORD_KEY = 'fund_record_point';
 
 const fundInput = document.getElementById('fundInput');
 const searchBtn = document.getElementById('searchBtn');
@@ -12,6 +13,7 @@ const result = document.getElementById('result');
 const addFundInput = document.getElementById('addFundInput');
 const addFundBtn = document.getElementById('addFundBtn');
 const exportBtn = document.getElementById('exportBtn');
+const setRecordBtn = document.getElementById('setRecordBtn');
 const fundList = document.getElementById('fundList');
 const fundListLoading = document.getElementById('fundListLoading');
 const fundListHeader = document.getElementById('fundListHeader');
@@ -22,6 +24,10 @@ const exportModalMessage = document.getElementById('exportModalMessage');
 const exportModalInfo = document.getElementById('exportModalInfo');
 const exportCancelBtn = document.getElementById('exportCancelBtn');
 const exportConfirmBtn = document.getElementById('exportConfirmBtn');
+const recordModal = document.getElementById('recordModal');
+const recordCancelBtn = document.getElementById('recordCancelBtn');
+const recordConfirmBtn = document.getElementById('recordConfirmBtn');
+const recordPointDate = document.getElementById('recordPointDate');
 const progressOverlay = document.getElementById('progressOverlay');
 const progressTitle = document.getElementById('progressTitle');
 const progressBar = document.getElementById('progressBar');
@@ -58,6 +64,39 @@ function findFundIndex(funds, code) {
     });
 }
 
+function getRecordPoint() {
+    try {
+        const data = localStorage.getItem(RECORD_KEY);
+        return data ? JSON.parse(data) : { date: null, values: {} };
+    } catch (e) {
+        console.error('读取记录点数据失败:', e);
+        return { date: null, values: {} };
+    }
+}
+
+function saveRecordPoint(values) {
+    try {
+        const record = {
+            date: new Date().toISOString().split('T')[0],
+            values: values
+        };
+        localStorage.setItem(RECORD_KEY, JSON.stringify(record));
+        return true;
+    } catch (e) {
+        console.error('保存记录点数据失败:', e);
+        return false;
+    }
+}
+
+function updateRecordDateDisplay() {
+    const record = getRecordPoint();
+    if (record.date) {
+        recordPointDate.textContent = record.date;
+    } else {
+        recordPointDate.textContent = '';
+    }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     loadSavedFunds();
 });
@@ -74,10 +113,19 @@ addFundInput.addEventListener('keypress', (e) => {
 
 exportBtn.addEventListener('click', () => exportFunds());
 
+setRecordBtn.addEventListener('click', () => {
+    recordModal.classList.remove('hidden');
+});
+
 refreshAllBtn.addEventListener('click', () => loadSavedFunds());
 
 exportConfirmBtn.addEventListener('click', () => confirmExport());
 exportCancelBtn.addEventListener('click', () => closeExportModal());
+
+recordConfirmBtn.addEventListener('click', () => confirmSetRecord());
+recordCancelBtn.addEventListener('click', () => {
+    recordModal.classList.add('hidden');
+});
 
 document.querySelectorAll('.quick-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -138,10 +186,12 @@ async function loadSavedFunds() {
             fundList.innerHTML = '<div class="empty-tip">暂无保存的基金，请添加基金代码</div>';
             refreshAllBtn.disabled = false;
             refreshAllBtn.textContent = '🔄 刷新';
+            updateRecordDateDisplay();
             return;
         }
         
         fundListHeader.classList.remove('hidden');
+        updateRecordDateDisplay();
         
         showProgress(funds.length);
         
@@ -191,7 +241,11 @@ function createFundItem(code, shares = null) {
             <span class="shares-display">${shares ? formatNumber(shares) : '-'}</span>
             <input type="number" class="shares-input hidden" step="0.01" min="0" placeholder="份额" value="${shares || ''}">
         </div>
-        <div class="fund-item-market-value">-</div>
+        <div class="fund-item-market-value">
+            <div class="market-value-main">-</div>
+            <div class="market-value-change"></div>
+        </div>
+        <div class="fund-item-record-value">-</div>
         <div class="fund-item-dividend">-</div>
         <div class="fund-item-actions">
             <button class="fund-item-edit" title="编辑份额">编辑</button>
@@ -382,13 +436,44 @@ function isWithinDays(dateStr, days) {
 
 function updateMarketValue(item, shares) {
     const marketValueEl = item.querySelector('.fund-item-market-value');
+    const marketValueMain = marketValueEl.querySelector('.market-value-main');
+    const marketValueChange = marketValueEl.querySelector('.market-value-change');
+    const recordValueEl = item.querySelector('.fund-item-record-value');
     const netValue = parseFloat(item.dataset.netValue);
+    const code = item.dataset.code;
+    
+    const record = getRecordPoint();
+    const recordValue = record.values[code] || null;
+    
+    if (recordValue) {
+        recordValueEl.textContent = formatNumber(recordValue);
+    } else {
+        recordValueEl.textContent = '-';
+    }
     
     if (shares && netValue) {
         const marketValue = shares * netValue;
-        marketValueEl.textContent = formatNumber(marketValue);
+        marketValueMain.textContent = formatNumber(marketValue);
+        
+        if (recordValue && recordValue > 0) {
+            const diff = marketValue - recordValue;
+            const percent = (diff / recordValue) * 100;
+            
+            if (diff !== 0) {
+                const diffText = diff > 0 ? `+${formatNumber(diff)}` : formatNumber(diff);
+                const percentText = percent > 0 ? `+${percent.toFixed(2)}%` : `${percent.toFixed(2)}%`;
+                marketValueChange.textContent = `${diffText} (${percentText})`;
+                marketValueChange.className = `market-value-change ${diff > 0 ? 'up' : 'down'}`;
+            } else {
+                marketValueChange.textContent = '0.00 (0.00%)';
+                marketValueChange.className = 'market-value-change';
+            }
+        } else {
+            marketValueChange.textContent = '';
+        }
     } else {
-        marketValueEl.textContent = '-';
+        marketValueMain.textContent = '-';
+        marketValueChange.textContent = '';
     }
 }
 
@@ -548,6 +633,36 @@ function closeExportModal() {
     exportModal.classList.add('hidden');
     pendingExportBlob = null;
     pendingExportFilename = null;
+}
+
+function confirmSetRecord() {
+    const items = fundList.querySelectorAll('.fund-item');
+    const recordValues = {};
+    
+    items.forEach(item => {
+        const code = item.dataset.code;
+        const netValue = parseFloat(item.dataset.netValue);
+        const sharesText = item.querySelector('.shares-display').textContent;
+        const shares = sharesText && sharesText !== '-' ? parseFloat(sharesText.replace(/,/g, '')) : null;
+        
+        if (shares && netValue) {
+            recordValues[code] = shares * netValue;
+        }
+    });
+    
+    saveRecordPoint(recordValues);
+    recordModal.classList.add('hidden');
+    
+    updateRecordDateDisplay();
+    
+    items.forEach(item => {
+        const code = item.dataset.code;
+        const sharesText = item.querySelector('.shares-display').textContent;
+        const shares = sharesText && sharesText !== '-' ? parseFloat(sharesText.replace(/,/g, '')) : null;
+        updateMarketValue(item, shares);
+    });
+    
+    showAddFundStatus('success', `✅ 记录点已设置（共 ${Object.keys(recordValues).length} 支基金）`);
 }
 
 function hideAddFundStatus() {

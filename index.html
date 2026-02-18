@@ -23,6 +23,7 @@
                 <input type="text" id="addFundInput" placeholder="输入基金代码，多个用逗号分隔（如：000001,110022）" maxlength="400">
                 <button id="addFundBtn">添加</button>
                 <button id="exportBtn" class="export-btn">导出</button>
+                <button id="setRecordBtn" class="record-btn">设置记录点</button>
             </div>
             <div id="addFundStatus" class="add-fund-status hidden"></div>
             <div id="fundListLoading" class="fund-list-loading hidden">
@@ -36,6 +37,10 @@
                 <div class="fund-header-item">单位净值</div>
                 <div class="fund-header-item">基金份额</div>
                 <div class="fund-header-item">基金市值</div>
+                <div class="fund-header-item record-point-header">
+                    <span>记录点市值</span>
+                    <span id="recordPointDate" class="record-date"></span>
+                </div>
                 <div class="fund-header-item">最近分红</div>
                 <div class="fund-header-item">操作</div>
             </div>
@@ -152,6 +157,22 @@
                 <div class="modal-footer">
                     <button id="exportCancelBtn" class="btn-secondary">取消</button>
                     <button id="exportConfirmBtn" class="btn-primary">下载</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="recordModal" class="modal hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>设置记录点</h3>
+                </div>
+                <div class="modal-body">
+                    <p>是否将当前基金列表数据设置为新记录点？</p>
+                    <p class="modal-info">此操作将覆盖上一个记录点数据。</p>
+                </div>
+                <div class="modal-footer">
+                    <button id="recordCancelBtn" class="btn-secondary">取消</button>
+                    <button id="recordConfirmBtn" class="btn-primary">确认</button>
                 </div>
             </div>
         </div>

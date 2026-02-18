@@ -114,6 +114,14 @@ header h1 {
     box-shadow: 0 5px 20px rgba(56, 161, 105, 0.4) !important;
 }
 
+.record-btn {
+    background: linear-gradient(135deg, #ed8936 0%, #c05621 100%) !important;
+}
+
+.record-btn:hover {
+    box-shadow: 0 5px 20px rgba(237, 137, 54, 0.4) !important;
+}
+
 .add-fund-status {
     padding: 15px 20px;
     margin-bottom: 15px;
@@ -181,7 +189,7 @@ header h1 {
 
 .fund-list-header {
     display: grid;
-    grid-template-columns: 1fr 80px 90px 80px 90px 90px 90px 100px;
+    grid-template-columns: 1fr 80px 90px 80px 90px 100px 100px 90px 100px;
     align-items: center;
     padding: 12px 15px;
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -198,6 +206,20 @@ header h1 {
 
 .fund-header-item:first-child {
     text-align: left;
+}
+
+.record-point-header {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    line-height: 1.3;
+}
+
+.record-date {
+    font-size: 0.7rem;
+    font-weight: 400;
+    opacity: 0.8;
+    margin-top: 2px;
 }
 
 .fund-list {
@@ -256,7 +278,7 @@ header h1 {
 
 .fund-item {
     display: grid;
-    grid-template-columns: 1fr 80px 90px 80px 90px 90px 90px 100px;
+    grid-template-columns: 1fr 80px 90px 80px 90px 100px 100px 90px 100px;
     align-items: center;
     padding: 15px;
     background: #f8f9fa;
@@ -330,6 +352,34 @@ header h1 {
 
 .fund-item-value.down {
     color: #38a169;
+}
+
+.fund-item-market-value {
+    text-align: center;
+}
+
+.market-value-main {
+    font-weight: 600;
+    color: #1a1a2e;
+}
+
+.market-value-change {
+    font-size: 0.75rem;
+    margin-top: 2px;
+}
+
+.market-value-change.up {
+    color: #e53e3e;
+}
+
+.market-value-change.down {
+    color: #38a169;
+}
+
+.fund-item-record-value {
+    text-align: center;
+    font-weight: 500;
+    color: #666;
 }
 
 .fund-item-dividend {
