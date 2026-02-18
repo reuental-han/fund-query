@@ -204,10 +204,9 @@ async function loadSavedFunds() {
             items.push({ code, item, shares });
         }
         
-        const promises = items.map(({ code, item, shares }) => 
-            fetchFundInfoForListWithProgress(code, item, shares)
-        );
-        await Promise.all(promises);
+        for (const { code, item, shares } of items) {
+            await fetchFundInfoForListWithProgress(code, item, shares);
+        }
         
         hideProgress();
         refreshAllBtn.disabled = false;
@@ -400,11 +399,9 @@ function fetchFundInfoForListJSONP(code) {
         const script = document.createElement('script');
         let resolved = false;
         let timeoutId = null;
-        const callbackName = `jsonpgz_${code}_${Date.now()}`;
         
         const cleanup = () => {
             if (timeoutId) clearTimeout(timeoutId);
-            delete window[callbackName];
             delete window.jsonpgz;
             if (script.parentNode) document.body.removeChild(script);
         };
