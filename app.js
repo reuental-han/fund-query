@@ -17,6 +17,19 @@ const fundListLoading = document.getElementById('fundListLoading');
 const fundListHeader = document.getElementById('fundListHeader');
 const refreshAllBtn = document.getElementById('refreshAllBtn');
 const addFundStatus = document.getElementById('addFundStatus');
+const exportModal = document.getElementById('exportModal');
+const exportModalMessage = document.getElementById('exportModalMessage');
+const exportModalInfo = document.getElementById('exportModalInfo');
+const exportCancelBtn = document.getElementById('exportCancelBtn');
+const exportConfirmBtn = document.getElementById('exportConfirmBtn');
+const progressOverlay = document.getElementById('progressOverlay');
+const progressTitle = document.getElementById('progressTitle');
+const progressBar = document.getElementById('progressBar');
+const progressText = document.getElementById('progressText');
+const progressPercent = document.getElementById('progressPercent');
+
+let pendingExportBlob = null;
+let pendingExportFilename = null;
 
 function getStoredFunds() {
     try {
@@ -63,6 +76,9 @@ exportBtn.addEventListener('click', () => exportFunds());
 
 refreshAllBtn.addEventListener('click', () => loadSavedFunds());
 
+exportConfirmBtn.addEventListener('click', () => confirmExport());
+exportCancelBtn.addEventListener('click', () => closeExportModal());
+
 document.querySelectorAll('.quick-btn').forEach(btn => {
     btn.addEventListener('click', () => {
         fundInput.value = btn.dataset.code;
@@ -81,6 +97,30 @@ document.querySelectorAll('.chart-btn').forEach(btn => {
 });
 
 const API_BASE = window.location.protocol === 'file:' ? 'http://127.0.0.1:5000' : '';
+
+let progressTotal = 0;
+let progressCompleted = 0;
+
+function showProgress(total) {
+    progressTotal = total;
+    progressCompleted = 0;
+    progressBar.style.width = '0%';
+    progressText.textContent = `正在查询 0/${total} 支基金`;
+    progressPercent.textContent = '0%';
+    progressOverlay.classList.remove('hidden');
+}
+
+function updateProgress() {
+    progressCompleted++;
+    const percent = Math.round((progressCompleted / progressTotal) * 100);
+    progressBar.style.width = `${percent}%`;
+    progressText.textContent = `正在查询 ${progressCompleted}/${progressTotal} 支基金`;
+    progressPercent.textContent = `${percent}%`;
+}
+
+function hideProgress() {
+    progressOverlay.classList.add('hidden');
+}
 
 async function loadSavedFunds() {
     fundList.innerHTML = '';
@@ -103,6 +143,8 @@ async function loadSavedFunds() {
         
         fundListHeader.classList.remove('hidden');
         
+        showProgress(funds.length);
+        
         const items = [];
         for (const fundData of funds) {
             const code = typeof fundData === 'string' ? fundData : fundData.code;
@@ -113,19 +155,26 @@ async function loadSavedFunds() {
         }
         
         const promises = items.map(({ code, item, shares }) => 
-            fetchFundInfoForList(code, item, shares)
+            fetchFundInfoForListWithProgress(code, item, shares)
         );
         await Promise.all(promises);
         
+        hideProgress();
         refreshAllBtn.disabled = false;
         refreshAllBtn.textContent = '🔄 刷新';
         
     } catch (err) {
+        hideProgress();
         fundListLoading.classList.add('hidden');
         fundList.innerHTML = '<div class="empty-tip">加载失败，请刷新重试</div>';
         refreshAllBtn.disabled = false;
         refreshAllBtn.textContent = '🔄 刷新';
     }
+}
+
+async function fetchFundInfoForListWithProgress(code, item, shares = null) {
+    await fetchFundInfoForList(code, item, shares);
+    updateProgress();
 }
 
 function createFundItem(code, shares = null) {
@@ -450,9 +499,6 @@ async function exportFunds() {
         }
         
         const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
         
         const contentDisposition = response.headers.get('Content-Disposition');
         let filename = '基金列表.xlsx';
@@ -463,13 +509,13 @@ async function exportFunds() {
             }
         }
         
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
+        pendingExportBlob = blob;
+        pendingExportFilename = filename;
         
-        showAddFundStatus('success', `✅ 导出成功！文件已下载（共 ${fundsData.length} 支基金）`);
+        exportModalInfo.textContent = `共 ${fundsData.length} 支基金，文件大小：${(blob.size / 1024).toFixed(1)} KB`;
+        exportModal.classList.remove('hidden');
+        
+        hideAddFundStatus();
         
     } catch (err) {
         console.warn('Error exporting funds:', err);
@@ -478,6 +524,34 @@ async function exportFunds() {
     
     exportBtn.disabled = false;
     exportBtn.textContent = '导出';
+}
+
+function confirmExport() {
+    if (!pendingExportBlob || !pendingExportFilename) return;
+    
+    const url = window.URL.createObjectURL(pendingExportBlob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = pendingExportFilename;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+    
+    closeExportModal();
+    
+    pendingExportBlob = null;
+    pendingExportFilename = null;
+}
+
+function closeExportModal() {
+    exportModal.classList.add('hidden');
+    pendingExportBlob = null;
+    pendingExportFilename = null;
+}
+
+function hideAddFundStatus() {
+    addFundStatus.classList.add('hidden');
 }
 
 async function addFund() {
@@ -616,10 +690,6 @@ function showAddFundStatus(type, message) {
     addFundStatus.className = `add-fund-status ${type}`;
     addFundStatus.innerHTML = message;
     addFundStatus.classList.remove('hidden');
-}
-
-function hideAddFundStatus() {
-    addFundStatus.classList.add('hidden');
 }
 
 function showAddFundError(message) {

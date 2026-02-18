@@ -140,11 +140,43 @@
             </div>
         </div>
 
+        <div id="exportModal" class="modal hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>导出基金数据</h3>
+                </div>
+                <div class="modal-body">
+                    <p id="exportModalMessage">文件已准备完成，是否下载？</p>
+                    <p class="modal-info" id="exportModalInfo"></p>
+                </div>
+                <div class="modal-footer">
+                    <button id="exportCancelBtn" class="btn-secondary">取消</button>
+                    <button id="exportConfirmBtn" class="btn-primary">下载</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="progressOverlay" class="progress-overlay hidden">
+            <div class="progress-container">
+                <div class="progress-header">
+                    <span class="progress-spinner"></span>
+                    <span id="progressTitle">正在查询基金数据...</span>
+                </div>
+                <div class="progress-bar-wrapper">
+                    <div class="progress-bar" id="progressBar"></div>
+                </div>
+                <div class="progress-info">
+                    <span id="progressText">正在查询 0/0 支基金</span>
+                    <span id="progressPercent">0%</span>
+                </div>
+            </div>
+        </div>
+
         <footer>
             <p>数据来源：天天基金网 | 仅供参考，不构成投资建议</p>
         </footer>
     </div>
 
-    <script src="app.js?v=20260212n"></script>
+    <script src="app.js?v=20260218"></script>
 </body>
 </html>
