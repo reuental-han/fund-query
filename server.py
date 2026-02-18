@@ -330,7 +330,7 @@ def fetch_fund_realtime_data(code):
             }
         )
         
-        with urllib.request.urlopen(req, timeout=5) as response:
+        with urllib.request.urlopen(req, timeout=10) as response:
             content = response.read().decode('utf-8', errors='ignore')
             
             match = re.search(r'jsonpgz\s*\(\s*(\{.*?\})\s*\)', content)
@@ -363,7 +363,7 @@ def fetch_fund_name_from_page(code):
             }
         )
         
-        with urllib.request.urlopen(req, timeout=5) as response:
+        with urllib.request.urlopen(req, timeout=10) as response:
             html = response.read().decode('utf-8', errors='ignore')
             
             patterns = [
@@ -403,7 +403,7 @@ def fetch_fund_history_data(code):
             }
         )
         
-        with urllib.request.urlopen(req, timeout=5) as response:
+        with urllib.request.urlopen(req, timeout=10) as response:
             content = response.read().decode('utf-8', errors='ignore')
             
             values = re.findall(r'<td>(\d{4}-\d{2}-\d{2})</td>\s*<td[^>]*>([\d.]+)</td>', content)
@@ -449,7 +449,7 @@ def fetch_fund_name(code):
             }
         )
         
-        with urllib.request.urlopen(req, timeout=5) as response:
+        with urllib.request.urlopen(req, timeout=10) as response:
             content = response.read().decode('utf-8', errors='ignore')
             
             match = re.search(r'jsonpgz\s*\(\s*(\{.*?\})\s*\)', content)
@@ -484,7 +484,7 @@ def fetch_dividend_date(code):
                 }
             )
             
-            with urllib.request.urlopen(req, timeout=5) as response:
+            with urllib.request.urlopen(req, timeout=10) as response:
                 html = response.read().decode('utf-8', errors='ignore')
                 
                 patterns = [
