@@ -753,12 +753,25 @@ footer {
     }
 
     .fund-item {
-        grid-template-columns: 1fr 80px;
+        grid-template-columns: 1fr 80px 80px 80px;
         gap: 5px;
     }
 
     .fund-item-date,
-    .fund-item-value {
+    .fund-item-value,
+    .fund-item-record-value,
+    .fund-item-dividend {
+        display: none;
+    }
+
+    .fund-list-header {
+        grid-template-columns: 1fr 80px 80px 80px;
+    }
+
+    .fund-list-header .fund-header-item:nth-child(3),
+    .fund-list-header .fund-header-item:nth-child(4),
+    .fund-list-header .fund-header-item:nth-child(7),
+    .fund-list-header .fund-header-item:nth-child(8) {
         display: none;
     }
 
