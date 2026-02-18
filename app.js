@@ -587,10 +587,14 @@ async function exportFunds() {
         const sharesDisplay = item.querySelector('.shares-display');
         const sharesText = sharesDisplay.textContent;
         const shares = sharesText && sharesText !== '-' ? parseFloat(sharesText.replace(/,/g, '')) : null;
-        const marketValueText = item.querySelector('.fund-item-market-value').textContent;
+        const marketValueMain = item.querySelector('.market-value-main');
+        const marketValueText = marketValueMain ? marketValueMain.textContent : '-';
         const marketValue = marketValueText && marketValueText !== '-' ? parseFloat(marketValueText.replace(/,/g, '')) : null;
-        const dividendText = item.querySelector('.fund-item-dividend').textContent;
-        const dividendDate = dividendText !== '暂无分红' ? dividendText : null;
+        const recordValueEl = item.querySelector('.fund-item-record-value');
+        const recordValueText = recordValueEl ? recordValueEl.textContent : '-';
+        const recordValue = recordValueText && recordValueText !== '-' ? parseFloat(recordValueText.replace(/,/g, '')) : null;
+        const dividendEl = item.querySelector('.fund-item-dividend');
+        const dividendText = dividendEl ? dividendEl.textContent : '-';
         
         fundsData.push({
             name: name,
@@ -599,7 +603,8 @@ async function exportFunds() {
             netValue: netValue,
             shares: shares,
             marketValue: marketValue,
-            dividendDate: dividendDate
+            recordValue: recordValue,
+            dividendDate: dividendText !== '-' && dividendText !== '暂无分红' ? dividendText : null
         });
     });
     
@@ -608,26 +613,37 @@ async function exportFunds() {
     showAddFundStatus('info', '正在生成Excel文件，请稍候...');
     
     try {
-        const response = await fetch(`${API_BASE}/api/export`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ funds: fundsData })
+        const worksheetData = [
+            ['基金名称', '基金代码', '净值日期', '单位净值', '基金份额', '基金市值', '记录点市值', '最近分红']
+        ];
+        
+        fundsData.forEach(fund => {
+            worksheetData.push([
+                fund.name || '',
+                fund.code || '',
+                fund.netValueDate || '',
+                fund.netValue || '',
+                fund.shares || '',
+                fund.marketValue || '',
+                fund.recordValue || '',
+                fund.dividendDate || ''
+            ]);
         });
         
-        if (!response.ok) {
-            throw new Error('导出失败');
-        }
+        const csvContent = worksheetData.map(row => 
+            row.map(cell => {
+                if (typeof cell === 'string' && (cell.includes(',') || cell.includes('"') || cell.includes('\n'))) {
+                    return `"${cell.replace(/"/g, '""')}"`;
+                }
+                return cell;
+            }).join(',')
+        ).join('\n');
         
-        const blob = await response.blob();
+        const BOM = '\uFEFF';
+        const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8' });
         
-        const contentDisposition = response.headers.get('Content-Disposition');
-        let filename = '基金列表.xlsx';
-        if (contentDisposition) {
-            const filenameMatch = contentDisposition.match(/filename\*?=['"]?(?:UTF-\d['"]*)?([^;\r\n"']*)['"]?;?/i);
-            if (filenameMatch && filenameMatch[1]) {
-                filename = decodeURIComponent(filenameMatch[1]);
-            }
-        }
+        const today = new Date().toISOString().split('T')[0];
+        const filename = `基金列表_${today}.csv`;
         
         pendingExportBlob = blob;
         pendingExportFilename = filename;
@@ -1094,23 +1110,8 @@ function fetchFundInfoFromHistory(code) {
 
 async function fetchFundName(code) {
     try {
-        const response = await fetch(`${API_BASE}/api/fundname/${code}`, {
-            method: 'GET',
-            headers: { 'Accept': 'application/json' }
-        });
-        
-        if (!response.ok) {
-            console.warn(`Fund name API returned ${response.status} for fund ${code}`);
-            return null;
-        }
-        
-        const data = await response.json();
-        
-        if (data && data.name) {
-            return data.name;
-        }
-        
-        return null;
+        const data = await fetchFundInfoForListJSONP(code);
+        return data.name || null;
     } catch (err) {
         console.warn(`Failed to fetch fund name for ${code}:`, err);
         return null;
@@ -1118,28 +1119,7 @@ async function fetchFundName(code) {
 }
 
 async function fetchDividendDate(code) {
-    try {
-        const response = await fetch(`${API_BASE}/api/dividend/${code}`, {
-            method: 'GET',
-            headers: { 'Accept': 'application/json' }
-        });
-        
-        if (!response.ok) {
-            console.warn(`Dividend API returned ${response.status} for fund ${code}`);
-            return null;
-        }
-        
-        const data = await response.json();
-        
-        if (data && data.dividendDate) {
-            return data.dividendDate;
-        }
-        
-        return null;
-    } catch (err) {
-        console.warn(`Failed to fetch dividend date for ${code}:`, err);
-        return null;
-    }
+    return null;
 }
 
 function displayFundInfo(data) {
