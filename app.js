@@ -144,8 +144,6 @@ document.querySelectorAll('.chart-btn').forEach(btn => {
     });
 });
 
-const API_BASE = window.location.protocol === 'file:' ? 'http://127.0.0.1:5000' : '';
-
 let progressTotal = 0;
 let progressCompleted = 0;
 
