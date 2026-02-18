@@ -358,16 +358,7 @@ async function saveFundsOrder() {
 
 async function fetchFundInfoForList(code, item, shares = null) {
     try {
-        const response = await fetch(`${API_BASE}/api/fundinfo/${code}`, {
-            method: 'GET',
-            headers: { 'Accept': 'application/json' }
-        });
-        
-        if (!response.ok) {
-            throw new Error(`API returned ${response.status}`);
-        }
-        
-        const data = await response.json();
+        const data = await fetchFundInfoForListJSONP(code);
         
         item.classList.remove('loading');
         item.dataset.netValue = data.netValue || '';
@@ -395,21 +386,65 @@ async function fetchFundInfoForList(code, item, shares = null) {
         updateMarketValue(item, shares);
         
         const dividendEl = item.querySelector('.fund-item-dividend');
-        if (data.dividendDate) {
-            dividendEl.textContent = data.dividendDate;
-            dividendEl.classList.add('has-dividend');
-            if (isWithinDays(data.dividendDate, 45)) {
-                dividendEl.classList.add('recent-dividend');
-            }
-        } else {
-            dividendEl.textContent = '暂无分红';
-        }
+        dividendEl.textContent = '-';
     } catch (err) {
         console.warn(`Failed to fetch fund info for ${code}:`, err);
         item.classList.remove('loading');
         item.querySelector('.fund-item-name').textContent = '获取失败';
         item.querySelector('.fund-item-name').style.color = '#e53e3e';
     }
+}
+
+function fetchFundInfoForListJSONP(code) {
+    return new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        let resolved = false;
+        let timeoutId = null;
+        const callbackName = `jsonpgz_${code}_${Date.now()}`;
+        
+        const cleanup = () => {
+            if (timeoutId) clearTimeout(timeoutId);
+            delete window[callbackName];
+            delete window.jsonpgz;
+            if (script.parentNode) document.body.removeChild(script);
+        };
+        
+        window.jsonpgz = function(data) {
+            if (resolved) return;
+            resolved = true;
+            cleanup();
+            
+            if (data && data.fundcode) {
+                resolve({
+                    code: data.fundcode,
+                    name: data.name,
+                    netValue: data.dwjz,
+                    netValueDate: data.jzrq,
+                    dayGrowth: data.gszzl
+                });
+            } else {
+                reject(new Error('API返回空数据'));
+            }
+        };
+
+        script.src = `https://fundgz.1234567.com.cn/js/${code}.js`;
+        script.onerror = () => {
+            if (resolved) return;
+            resolved = true;
+            cleanup();
+            reject(new Error('API请求失败'));
+        };
+        
+        timeoutId = setTimeout(() => {
+            if (!resolved) {
+                resolved = true;
+                cleanup();
+                reject(new Error('API请求超时'));
+            }
+        }, 5000);
+        
+        document.body.appendChild(script);
+    });
 }
 
 function formatNumber(num) {
@@ -715,17 +750,7 @@ async function addFund() {
         }
         
         try {
-            const response = await fetch(`${API_BASE}/api/fundinfo/${code}`, {
-                method: 'GET',
-                headers: { 'Accept': 'application/json' }
-            });
-            
-            if (!response.ok) {
-                notFoundCodes.push(code);
-                continue;
-            }
-            
-            const data = await response.json();
+            const data = await fetchFundInfoForListJSONP(code);
             
             if (data.name || data.netValue) {
                 validCodes.push(code);
@@ -734,7 +759,7 @@ async function addFund() {
                 notFoundCodes.push(code);
             }
         } catch (err) {
-            errorCodes.push(code);
+            notFoundCodes.push(code);
         }
     }
     
