@@ -402,8 +402,10 @@ function fetchFundInfoForListJSONP(code) {
         
         const cleanup = () => {
             if (timeoutId) clearTimeout(timeoutId);
-            delete window.jsonpgz;
             if (script.parentNode) document.body.removeChild(script);
+            setTimeout(() => {
+                delete window.jsonpgz;
+            }, 100);
         };
         
         window.jsonpgz = function(data) {
@@ -438,7 +440,7 @@ function fetchFundInfoForListJSONP(code) {
                 cleanup();
                 reject(new Error('API请求超时'));
             }
-        }, 5000);
+        }, 8000);
         
         document.body.appendChild(script);
     });
@@ -662,19 +664,46 @@ async function exportFunds() {
 function confirmExport() {
     if (!pendingExportBlob || !pendingExportFilename) return;
     
-    const url = window.URL.createObjectURL(pendingExportBlob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = pendingExportFilename;
-    document.body.appendChild(a);
-    a.click();
-    window.URL.revokeObjectURL(url);
-    document.body.removeChild(a);
+    if (window.showSaveFilePicker) {
+        window.showSaveFilePicker({
+            suggestedName: pendingExportFilename,
+            types: [{
+                description: 'CSV文件',
+                accept: { 'text/csv': ['.csv'] }
+            }]
+        }).then(handle => {
+            return handle.createWritable();
+        }).then(writable => {
+            return writable.write(pendingExportBlob).then(() => writable.close());
+        }).then(() => {
+            closeExportModal();
+            showAddFundStatus('success', '✅ 文件已保存');
+        }).catch(err => {
+            if (err.name !== 'AbortError') {
+                console.error('保存文件失败:', err);
+                fallbackDownload();
+            }
+        }).finally(() => {
+            pendingExportBlob = null;
+            pendingExportFilename = null;
+        });
+    } else {
+        fallbackDownload();
+    }
     
-    closeExportModal();
-    
-    pendingExportBlob = null;
-    pendingExportFilename = null;
+    function fallbackDownload() {
+        const url = window.URL.createObjectURL(pendingExportBlob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = pendingExportFilename;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        closeExportModal();
+        pendingExportBlob = null;
+        pendingExportFilename = null;
+    }
 }
 
 function closeExportModal() {
