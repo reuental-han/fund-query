@@ -639,7 +639,17 @@ async function removeFund(code) {
         saveStoredFunds(funds);
     }
     
-    loadSavedFunds();
+    const item = fundList.querySelector(`.fund-item[data-code="${code}"]`);
+    if (item) {
+        item.classList.add('fund-item-removing');
+        setTimeout(() => {
+            item.remove();
+            if (fundList.querySelectorAll('.fund-item').length === 0) {
+                fundList.innerHTML = '<div class="empty-tip">暂无保存的基金，请添加基金代码</div>';
+                fundListHeader.classList.add('hidden');
+            }
+        }, 300);
+    }
 }
 
 function showAddFundError(message) {
