@@ -14,7 +14,6 @@ app = Flask(__name__)
 CORS(app)
 
 FUNDS_FILE = 'funds.json'
-FUND_CODE_CACHE_FILE = 'fund_code_cache.json'
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 def load_funds():
@@ -431,72 +430,13 @@ def fetch_fund_history_data(code):
     
     return None
 
-FUND_CODE_CACHE = {}
-
-def save_fund_code_cache():
-    global FUND_CODE_CACHE
-    try:
-        cache_path = os.path.join(BASE_DIR, FUND_CODE_CACHE_FILE)
-        with open(cache_path, 'w', encoding='utf-8') as f:
-            json.dump(FUND_CODE_CACHE, f, ensure_ascii=False, indent=2)
-        print(f"基金代码缓存已保存到本地文件")
-    except Exception as e:
-        print(f"保存基金代码缓存失败: {e}")
-
-def load_fund_code_cache_from_file():
-    global FUND_CODE_CACHE
-    try:
-        cache_path = os.path.join(BASE_DIR, FUND_CODE_CACHE_FILE)
-        if os.path.exists(cache_path):
-            with open(cache_path, 'r', encoding='utf-8') as f:
-                FUND_CODE_CACHE = json.load(f)
-            print(f"从本地文件加载基金代码缓存，共 {len(FUND_CODE_CACHE)} 只基金")
-            return True
-    except Exception as e:
-        print(f"加载本地基金代码缓存失败: {e}")
-    return False
-
-def initialize_fund_code_cache():
-    global FUND_CODE_CACHE
-    
-    if load_fund_code_cache_from_file():
-        return
-    
-    try:
-        req = urllib.request.Request(
-            'https://fund.eastmoney.com/js/fundcode_search.js',
-            headers={
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Accept': '*/*',
-                'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
-                'Referer': 'https://fund.eastmoney.com/'
-            }
-        )
-        
-        with urllib.request.urlopen(req, timeout=15) as response:
-            content = response.read().decode('utf-8', errors='ignore')
-            
-            match = re.search(r'var\s+r\s*=\s*(\[.*?\]);', content, re.DOTALL)
-            if match:
-                try:
-                    funds_data = json.loads(match.group(1))
-                    for item in funds_data:
-                        if item and len(item) >= 3:
-                            FUND_CODE_CACHE[item[0]] = item[2]
-                    print(f"基金代码缓存初始化完成，共缓存 {len(FUND_CODE_CACHE)} 只基金")
-                    save_fund_code_cache()
-                except json.JSONDecodeError as e:
-                    print(f"解析基金代码列表失败: {e}")
-    except urllib.error.URLError as e:
-        print(f"下载基金代码列表失败: {e}")
-    except Exception as e:
-        print(f"初始化基金代码缓存时发生错误: {e}")
+FUND_NAME_CACHE = {}
 
 def fetch_fund_name(code):
-    global FUND_CODE_CACHE
+    global FUND_NAME_CACHE
     
-    if code in FUND_CODE_CACHE:
-        return FUND_CODE_CACHE[code]
+    if code in FUND_NAME_CACHE:
+        return FUND_NAME_CACHE[code]
     
     try:
         req = urllib.request.Request(
@@ -517,7 +457,7 @@ def fetch_fund_name(code):
                 try:
                     data = json.loads(match.group(1))
                     if data and data.get('name'):
-                        FUND_CODE_CACHE[code] = data.get('name')
+                        FUND_NAME_CACHE[code] = data.get('name')
                         return data.get('name')
                 except json.JSONDecodeError:
                     pass
@@ -595,8 +535,6 @@ def fetch_dividend_date(code):
             continue
     
     return None
-
-initialize_fund_code_cache()
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
