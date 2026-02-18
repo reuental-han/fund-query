@@ -204,6 +204,30 @@ header h1 {
     min-height: 50px;
 }
 
+.fund-item-new {
+    animation: slideIn 0.4s ease-out, fadeIn 0.4s ease-out;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateY(-20px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+@keyframes fadeIn {
+    from {
+        background-color: #e8f4fd;
+    }
+    to {
+        background-color: transparent;
+    }
+}
+
 .empty-tip {
     text-align: center;
     color: #999;

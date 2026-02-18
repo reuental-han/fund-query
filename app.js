@@ -583,8 +583,33 @@ async function addFund() {
     
     if (validCodes.length > 0) {
         addFundInput.value = '';
-        loadSavedFunds();
+        appendNewFunds(validCodes);
     }
+}
+
+function appendNewFunds(codes) {
+    if (codes.length === 0) return;
+    
+    fundListHeader.classList.remove('hidden');
+    
+    const items = [];
+    for (const code of codes) {
+        const item = createFundItem(code, null);
+        item.classList.add('fund-item-new');
+        fundList.appendChild(item);
+        items.push({ code, item, shares: null });
+    }
+    
+    setTimeout(() => {
+        document.querySelectorAll('.fund-item-new').forEach(item => {
+            item.classList.remove('fund-item-new');
+        });
+    }, 50);
+    
+    const promises = items.map(({ code, item, shares }) => 
+        fetchFundInfoForList(code, item, shares)
+    );
+    Promise.all(promises);
 }
 
 function showAddFundStatus(type, message) {
