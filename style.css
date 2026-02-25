@@ -387,6 +387,11 @@ header h1 {
     font-size: 0.85rem;
 }
 
+.fund-item-dividend.querying {
+    color: #999;
+    font-style: italic;
+}
+
 .fund-item-dividend.has-dividend {
     color: #667eea;
     font-weight: 500;

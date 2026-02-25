@@ -5,6 +5,104 @@ let draggedItem = null;
 const STORAGE_KEY = 'fund_query_data';
 const RECORD_KEY = 'fund_record_point';
 
+function jsonpRequest(url, callbackName, timeout = 8000) {
+    return new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        let resolved = false;
+        let timeoutId = null;
+
+        const cleanup = () => {
+            if (timeoutId) clearTimeout(timeoutId);
+            if (script.parentNode) document.body.removeChild(script);
+            setTimeout(() => {
+                if (window[callbackName]) {
+                    delete window[callbackName];
+                }
+            }, 100);
+        };
+
+        window[callbackName] = function(data) {
+            if (resolved) return;
+            resolved = true;
+            cleanup();
+            resolve(data);
+        };
+
+        script.src = url;
+        script.onerror = () => {
+            if (resolved) return;
+            resolved = true;
+            cleanup();
+            reject(new Error('网络请求失败'));
+        };
+
+        timeoutId = setTimeout(() => {
+            if (!resolved) {
+                resolved = true;
+                cleanup();
+                reject(new Error('请求超时'));
+            }
+        }, timeout);
+
+        document.body.appendChild(script);
+    });
+}
+
+function eastMoneyApiRequest(url, timeout = 10000) {
+    return new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        let resolved = false;
+        let timeoutId = null;
+
+        const cleanup = () => {
+            if (timeoutId) clearTimeout(timeoutId);
+            if (script.parentNode) document.body.removeChild(script);
+        };
+
+        const checkData = () => {
+            if (resolved) return;
+
+            if (window.apidata && window.apidata.content) {
+                resolved = true;
+                const content = window.apidata.content;
+                delete window.apidata;
+                cleanup();
+                resolve(content);
+            }
+        };
+
+        script.onload = () => {
+            checkData();
+            if (!resolved) {
+                resolved = true;
+                cleanup();
+                reject(new Error('获取数据失败'));
+            }
+        };
+
+        script.onerror = () => {
+            if (resolved) return;
+            resolved = true;
+            cleanup();
+            reject(new Error('网络请求失败'));
+        };
+
+        timeoutId = setTimeout(() => {
+            if (!resolved) {
+                checkData();
+                if (!resolved) {
+                    resolved = true;
+                    cleanup();
+                    reject(new Error('请求超时'));
+                }
+            }
+        }, timeout);
+
+        script.src = url;
+        document.body.appendChild(script);
+    });
+}
+
 const fundInput = document.getElementById('fundInput');
 const searchBtn = document.getElementById('searchBtn');
 const loading = document.getElementById('loading');
@@ -356,21 +454,21 @@ async function saveFundsOrder() {
 async function fetchFundInfoForList(code, item, shares = null) {
     try {
         const data = await fetchFundInfoForListJSONP(code);
-        
+
         item.classList.remove('loading');
         item.dataset.netValue = data.netValue || '';
-        
+
         if (data.name) {
             item.querySelector('.fund-item-name').textContent = data.name;
         } else {
             item.querySelector('.fund-item-name').textContent = `基金${code}`;
         }
-        
+
         item.querySelector('.fund-item-date').textContent = data.netValueDate || '-';
-        
+
         const valueEl = item.querySelector('.fund-item-value');
         valueEl.textContent = data.netValue || '-';
-        
+
         const growth = parseFloat(data.dayGrowth);
         if (!isNaN(growth)) {
             if (growth >= 0) {
@@ -379,11 +477,25 @@ async function fetchFundInfoForList(code, item, shares = null) {
                 valueEl.classList.add('down');
             }
         }
-        
+
         updateMarketValue(item, shares);
-        
+
         const dividendEl = item.querySelector('.fund-item-dividend');
-        dividendEl.textContent = '-';
+        dividendEl.textContent = '查询中...';
+        dividendEl.classList.add('querying');
+
+        fetchDividendDateWithRetry(code).then(dividendDate => {
+            dividendEl.classList.remove('querying');
+            if (dividendDate) {
+                dividendEl.textContent = dividendDate;
+            } else {
+                dividendEl.textContent = '暂无分红';
+            }
+        }).catch(err => {
+            console.warn(`Failed to fetch dividend for ${code}:`, err);
+            dividendEl.classList.remove('querying');
+            dividendEl.textContent = '暂无分红';
+        });
     } catch (err) {
         console.warn(`Failed to fetch fund info for ${code}:`, err);
         item.classList.remove('loading');
@@ -392,55 +504,49 @@ async function fetchFundInfoForList(code, item, shares = null) {
     }
 }
 
-function fetchFundInfoForListJSONP(code) {
-    return new Promise((resolve, reject) => {
-        const script = document.createElement('script');
-        let resolved = false;
-        let timeoutId = null;
-        
-        const cleanup = () => {
-            if (timeoutId) clearTimeout(timeoutId);
-            if (script.parentNode) document.body.removeChild(script);
-            setTimeout(() => {
-                delete window.jsonpgz;
-            }, 100);
-        };
-        
-        window.jsonpgz = function(data) {
-            if (resolved) return;
-            resolved = true;
-            cleanup();
-            
-            if (data && data.fundcode) {
-                resolve({
-                    code: data.fundcode,
-                    name: data.name,
-                    netValue: data.dwjz,
-                    netValueDate: data.jzrq,
-                    dayGrowth: data.gszzl
-                });
-            } else {
-                reject(new Error('API返回空数据'));
-            }
-        };
+const API_BASE = '';
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 1000;
 
-        script.src = `https://fundgz.1234567.com.cn/js/${code}.js`;
-        script.onerror = () => {
-            if (resolved) return;
-            resolved = true;
-            cleanup();
-            reject(new Error('API请求失败'));
-        };
-        
-        timeoutId = setTimeout(() => {
-            if (!resolved) {
-                resolved = true;
-                cleanup();
-                reject(new Error('API请求超时'));
+async function fetchDividendDateWithRetry(code, retries = MAX_RETRIES) {
+    for (let attempt = 0; attempt < retries; attempt++) {
+        try {
+            const response = await fetch(`${API_BASE}/api/fund/dividend/${code}`);
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
             }
-        }, 8000);
-        
-        document.body.appendChild(script);
+            const result = await response.json();
+            if (result.success && result.dividendDate) {
+                return result.dividendDate;
+            }
+            return null;
+        } catch (err) {
+            console.warn(`Dividend fetch attempt ${attempt + 1} failed for ${code}:`, err);
+            if (attempt < retries - 1) {
+                await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * (attempt + 1)));
+            }
+        }
+    }
+    return null;
+}
+
+function fetchFundInfoForListJSONP(code) {
+    return jsonpRequest(
+        `https://fundgz.1234567.com.cn/js/${code}.js`,
+        'jsonpgz',
+        8000
+    ).then(data => {
+        if (data && data.fundcode) {
+            return {
+                code: data.fundcode,
+                name: data.name,
+                netValue: data.dwjz,
+                netValueDate: data.jzrq,
+                dayGrowth: data.gszzl
+            };
+        } else {
+            throw new Error('API返回空数据');
+        }
     });
 }
 
@@ -958,177 +1064,95 @@ async function searchFund() {
 }
 
 function fetchFundInfo(code) {
-    return new Promise((resolve, reject) => {
-        const script = document.createElement('script');
-        let resolved = false;
-        let timeoutId = null;
-        
-        const cleanup = () => {
-            if (timeoutId) clearTimeout(timeoutId);
-            delete window.jsonpgz;
-            if (script.parentNode) document.body.removeChild(script);
-        };
-        
-        window.jsonpgz = function(data) {
-            if (resolved) return;
-            resolved = true;
-            cleanup();
-            
-            if (data && data.fundcode) {
-                resolve({
-                    code: data.fundcode,
-                    name: data.name,
-                    type: '-',
-                    netValue: data.dwjz,
-                    netValueDate: data.jzrq,
-                    dayGrowth: data.gszzl,
-                    estimatedValue: data.gsz,
-                    estimatedTime: data.gztime,
-                    weekGrowth: '-',
-                    monthGrowth: '-',
-                    threeMonthGrowth: '-',
-                    sixMonthGrowth: '-',
-                    yearGrowth: '-',
-                    manager: '-',
-                    company: '-',
-                    scale: '-',
-                    establishDate: '-'
-                });
-            } else {
-                reject(new Error('fundgz API返回空数据'));
-            }
-        };
-
-        script.src = `https://fundgz.1234567.com.cn/js/${code}.js`;
-        script.onerror = () => {
-            if (resolved) return;
-            resolved = true;
-            cleanup();
-            reject(new Error('fundgz API请求失败'));
-        };
-        
-        timeoutId = setTimeout(() => {
-            if (!resolved) {
-                resolved = true;
-                cleanup();
-                reject(new Error('fundgz API请求超时'));
-            }
-        }, 3000);
-        
-        document.body.appendChild(script);
+    return jsonpRequest(
+        `https://fundgz.1234567.com.cn/js/${code}.js`,
+        'jsonpgz',
+        3000
+    ).then(data => {
+        if (data && data.fundcode) {
+            return {
+                code: data.fundcode,
+                name: data.name,
+                type: '-',
+                netValue: data.dwjz,
+                netValueDate: data.jzrq,
+                dayGrowth: data.gszzl,
+                estimatedValue: data.gsz,
+                estimatedTime: data.gztime,
+                weekGrowth: '-',
+                monthGrowth: '-',
+                threeMonthGrowth: '-',
+                sixMonthGrowth: '-',
+                yearGrowth: '-',
+                manager: '-',
+                company: '-',
+                scale: '-',
+                establishDate: '-'
+            };
+        } else {
+            throw new Error('fundgz API返回空数据');
+        }
     });
 }
 
 function fetchFundInfoFromHistory(code) {
-    return new Promise((resolve, reject) => {
-        const script = document.createElement('script');
-        let resolved = false;
-        let timeoutId = null;
-        
-        const cleanup = () => {
-            if (timeoutId) clearTimeout(timeoutId);
-            if (script.parentNode) document.body.removeChild(script);
-        };
-        
-        const checkData = () => {
-            if (resolved) return;
-            
-            if (window.apidata && window.apidata.content) {
-                resolved = true;
-                const content = window.apidata.content;
-                delete window.apidata;
-                cleanup();
-                
-                const data = parseNetValueData(content);
-                if (data.length > 0) {
-                    const latest = data[data.length - 1];
-                    const prev = data.length > 1 ? data[data.length - 2] : null;
-                    
-                    let dayGrowth = '-';
-                    if (prev && prev.value > 0) {
-                        dayGrowth = ((latest.value - prev.value) / prev.value * 100).toFixed(2);
-                    }
-                    
-                    fetchFundName(code).then(name => {
-                        resolve({
-                            code: code,
-                            name: name || `基金${code}`,
-                            type: '-',
-                            netValue: latest.value.toString(),
-                            netValueDate: latest.date,
-                            dayGrowth: dayGrowth,
-                            weekGrowth: '-',
-                            monthGrowth: '-',
-                            threeMonthGrowth: '-',
-                            sixMonthGrowth: '-',
-                            yearGrowth: '-',
-                            manager: '-',
-                            company: '-',
-                            scale: '-',
-                            establishDate: '-'
-                        });
-                    }).catch(() => {
-                        resolve({
-                            code: code,
-                            name: `基金${code}`,
-                            type: '-',
-                            netValue: latest.value.toString(),
-                            netValueDate: latest.date,
-                            dayGrowth: dayGrowth,
-                            weekGrowth: '-',
-                            monthGrowth: '-',
-                            threeMonthGrowth: '-',
-                            sixMonthGrowth: '-',
-                            yearGrowth: '-',
-                            manager: '-',
-                            company: '-',
-                            scale: '-',
-                            establishDate: '-'
-                        });
-                    });
-                } else {
-                    reject(new Error('未找到该基金，请检查基金代码'));
-                }
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - 7);
+
+    const formatDate = (date) => {
+        return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    };
+
+    const url = `https://fund.eastmoney.com/f10/F10DataApi.aspx?type=lsjz&code=${code}&page=1&sdate=${formatDate(startDate)}&edate=${formatDate(endDate)}&per=10`;
+
+    return eastMoneyApiRequest(url, 5000).then(content => {
+        const data = parseNetValueData(content);
+        if (data.length > 0) {
+            const latest = data[data.length - 1];
+            const prev = data.length > 1 ? data[data.length - 2] : null;
+
+            let dayGrowth = '-';
+            if (prev && prev.value > 0) {
+                dayGrowth = ((latest.value - prev.value) / prev.value * 100).toFixed(2);
             }
-        };
-        
-        const endDate = new Date();
-        const startDate = new Date();
-        startDate.setDate(startDate.getDate() - 7);
-        
-        const formatDate = (date) => {
-            return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-        };
-        
-        script.onload = () => {
-            checkData();
-            if (!resolved) {
-                resolved = true;
-                cleanup();
-                reject(new Error('未找到该基金，请检查基金代码'));
-            }
-        };
-        
-        script.onerror = () => {
-            if (resolved) return;
-            resolved = true;
-            cleanup();
-            reject(new Error('网络请求失败，请稍后重试'));
-        };
-        
-        timeoutId = setTimeout(() => {
-            if (!resolved) {
-                checkData();
-                if (!resolved) {
-                    resolved = true;
-                    cleanup();
-                    reject(new Error('请求超时，请稍后重试'));
-                }
-            }
-        }, 5000);
-        
-        script.src = `https://fund.eastmoney.com/f10/F10DataApi.aspx?type=lsjz&code=${code}&page=1&sdate=${formatDate(startDate)}&edate=${formatDate(endDate)}&per=10`;
-        document.body.appendChild(script);
+
+            return fetchFundName(code).then(name => ({
+                code: code,
+                name: name || `基金${code}`,
+                type: '-',
+                netValue: latest.value.toString(),
+                netValueDate: latest.date,
+                dayGrowth: dayGrowth,
+                weekGrowth: '-',
+                monthGrowth: '-',
+                threeMonthGrowth: '-',
+                sixMonthGrowth: '-',
+                yearGrowth: '-',
+                manager: '-',
+                company: '-',
+                scale: '-',
+                establishDate: '-'
+            })).catch(() => ({
+                code: code,
+                name: `基金${code}`,
+                type: '-',
+                netValue: latest.value.toString(),
+                netValueDate: latest.date,
+                dayGrowth: dayGrowth,
+                weekGrowth: '-',
+                monthGrowth: '-',
+                threeMonthGrowth: '-',
+                sixMonthGrowth: '-',
+                yearGrowth: '-',
+                manager: '-',
+                company: '-',
+                scale: '-',
+                establishDate: '-'
+            }));
+        } else {
+            throw new Error('未找到该基金，请检查基金代码');
+        }
     });
 }
 
@@ -1200,89 +1224,41 @@ async function loadChart(code, range) {
 }
 
 function fetchNetValueHistory(code, range) {
-    return new Promise((resolve, reject) => {
-        const endDate = new Date();
-        const startDate = new Date();
-        
-        switch (range) {
-            case '1m':
-                startDate.setMonth(startDate.getMonth() - 1);
-                break;
-            case '3m':
-                startDate.setMonth(startDate.getMonth() - 3);
-                break;
-            case '6m':
-                startDate.setMonth(startDate.getMonth() - 6);
-                break;
-            case '1y':
-                startDate.setFullYear(startDate.getFullYear() - 1);
-                break;
-            default:
-                startDate.setMonth(startDate.getMonth() - 1);
+    const endDate = new Date();
+    const startDate = new Date();
+
+    switch (range) {
+        case '1m':
+            startDate.setMonth(startDate.getMonth() - 1);
+            break;
+        case '3m':
+            startDate.setMonth(startDate.getMonth() - 3);
+            break;
+        case '6m':
+            startDate.setMonth(startDate.getMonth() - 6);
+            break;
+        case '1y':
+            startDate.setFullYear(startDate.getFullYear() - 1);
+            break;
+        default:
+            startDate.setMonth(startDate.getMonth() - 1);
+    }
+
+    const formatDate = (date) => {
+        return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    };
+
+    const sdate = formatDate(startDate);
+    const edate = formatDate(endDate);
+    const url = `https://fund.eastmoney.com/f10/F10DataApi.aspx?type=lsjz&code=${code}&page=1&sdate=${sdate}&edate=${edate}&per=365`;
+
+    return eastMoneyApiRequest(url, 10000).then(content => {
+        const data = parseNetValueData(content);
+        if (data.length > 0) {
+            return data;
+        } else {
+            throw new Error('获取历史数据失败');
         }
-        
-        const formatDate = (date) => {
-            return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-        };
-        
-        const sdate = formatDate(startDate);
-        const edate = formatDate(endDate);
-        const script = document.createElement('script');
-        let resolved = false;
-        let timeoutId = null;
-        
-        const cleanup = () => {
-            if (timeoutId) clearTimeout(timeoutId);
-            if (script.parentNode) document.body.removeChild(script);
-        };
-        
-        const checkData = () => {
-            if (resolved) return;
-            
-            if (window.apidata && window.apidata.content) {
-                resolved = true;
-                const content = window.apidata.content;
-                delete window.apidata;
-                cleanup();
-                
-                const data = parseNetValueData(content);
-                if (data.length > 0) {
-                    resolve(data);
-                } else {
-                    reject(new Error('获取历史数据失败'));
-                }
-            }
-        };
-        
-        script.onload = () => {
-            checkData();
-            if (!resolved) {
-                resolved = true;
-                cleanup();
-                reject(new Error('获取历史数据失败'));
-            }
-        };
-        
-        script.onerror = () => {
-            if (resolved) return;
-            resolved = true;
-            cleanup();
-            reject(new Error('网络请求失败'));
-        };
-        
-        timeoutId = setTimeout(() => {
-            if (!resolved) {
-                checkData();
-                if (!resolved) {
-                    resolved = true;
-                    cleanup();
-                    reject(new Error('请求超时'));
-                }
-            }
-        }, 10000);
-        
-        script.src = `https://fund.eastmoney.com/f10/F10DataApi.aspx?type=lsjz&code=${code}&page=1&sdate=${sdate}&edate=${edate}&per=365`;
-        document.body.appendChild(script);
     });
 }
 
