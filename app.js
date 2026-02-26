@@ -504,7 +504,7 @@ async function fetchFundInfoForList(code, item, shares = null) {
     }
 }
 
-const API_BASE = '';
+const API_BASE = 'https://1342955257-84iuimb65s.ap-beijing.tencentscf.com';
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000;
 

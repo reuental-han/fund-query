@@ -2,6 +2,9 @@ import json
 import requests
 import time
 import re
+from flask import Flask, request, jsonify
+
+app = Flask(__name__)
 
 def safe_request(url, timeout=10, max_retries=3):
     """安全的 HTTP 请求，带重试机制"""
@@ -16,6 +19,7 @@ def safe_request(url, timeout=10, max_retries=3):
                 continue
             raise e
 
+@app.route('/api/fund/dividend/<code>')
 def get_dividend(code):
     """获取基金分红信息"""
     try:
@@ -27,78 +31,20 @@ def get_dividend(code):
         dates = re.findall(date_pattern, html)
 
         if dates:
-            return {'success': True, 'dividendDate': dates[0]}
+            return jsonify({'success': True, 'dividendDate': dates[0]})
         else:
-            return {'success': True, 'dividendDate': None}
+            return jsonify({'success': True, 'dividendDate': None})
     except Exception as e:
-        return {'success': False, 'error': str(e)}
+        return jsonify({'success': False, 'error': str(e)}), 500
 
-def main_handler(event, context):
-    """腾讯云 SCF 入口函数"""
-    # 解析请求路径
-    path = event.get('path', '')
-    method = event.get('httpMethod', 'GET')
-    
-    # 解析路径参数
-    path_parts = path.strip('/').split('/')
-    
-    # 设置 CORS 头
-    headers = {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type'
-    }
-    
-    # 处理 OPTIONS 预检请求
-    if method == 'OPTIONS':
-        return {
-            'statusCode': 200,
-            'headers': headers,
-            'body': ''
-        }
-    
-    # 路由处理
-    try:
-        # 健康检查
-        if path.endswith('/api/health'):
-            return {
-                'statusCode': 200,
-                'headers': headers,
-                'body': json.dumps({'status': 'ok'})
-            }
-        
-        # 分红查询: /api/fund/dividend/{code}
-        if '/api/fund/dividend/' in path:
-            code = path_parts[-1]
-            if code.isdigit() and len(code) == 6:
-                result = get_dividend(code)
-                return {
-                    'statusCode': 200,
-                    'headers': headers,
-                    'body': json.dumps(result)
-                }
-        
-        # 404
-        return {
-            'statusCode': 404,
-            'headers': headers,
-            'body': json.dumps({'error': 'Not Found'})
-        }
-        
-    except Exception as e:
-        return {
-            'statusCode': 500,
-            'headers': headers,
-            'body': json.dumps({'error': str(e)})
-        }
+@app.route('/api/health')
+def health_check():
+    """健康检查"""
+    return jsonify({'status': 'ok'})
 
-# 本地测试入口
+@app.route('/')
+def index():
+    return jsonify({'message': 'Fund Query API', 'endpoints': ['/api/fund/dividend/<code>', '/api/health']})
+
 if __name__ == '__main__':
-    # 模拟 SCF 事件
-    test_event = {
-        'path': '/api/fund/dividend/000001',
-        'httpMethod': 'GET'
-    }
-    result = main_handler(test_event, None)
-    print(result)
+    app.run(host='0.0.0.0', port=9000)
