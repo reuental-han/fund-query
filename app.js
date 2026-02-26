@@ -852,53 +852,58 @@ function hideAddFundStatus() {
 
 async function addFund() {
     const input = addFundInput.value.trim();
-    
+
     if (!input) {
         showAddFundStatus('error', '请输入基金代码');
         return;
     }
-    
+
     const normalizedInput = input.replace(/，/g, ',');
     const codeList = normalizedInput.split(',')
         .map(c => c.trim())
         .filter(c => c.length > 0);
-    
+
     const invalidCodes = codeList.filter(c => !/^\d{6}$/.test(c));
     if (invalidCodes.length > 0) {
         showAddFundStatus('error', `以下代码格式无效（需为6位数字）：${invalidCodes.join(', ')}`);
         return;
     }
-    
+
     if (codeList.length > 50) {
         showAddFundStatus('error', `单次最多添加50支基金，当前输入了${codeList.length}支`);
         return;
     }
-    
+
     addFundBtn.disabled = true;
     addFundBtn.textContent = `验证中 (0/${codeList.length})...`;
     hideAddFundStatus();
-    
+
     const funds = getStoredFunds();
     const existingCodes = new Set(funds.map(f => typeof f === 'string' ? f : f.code));
-    
+
     const validCodes = [];
     const duplicateCodes = [];
     const notFoundCodes = [];
     const errorCodes = [];
-    
+
     for (let i = 0; i < codeList.length; i++) {
         const code = codeList[i];
         addFundBtn.textContent = `验证中 (${i + 1}/${codeList.length})...`;
-        
+
         if (existingCodes.has(code)) {
             duplicateCodes.push(code);
             continue;
         }
-        
+
         try {
-            const data = await fetchFundInfoForListJSONP(code);
-            
-            if (data.name || data.netValue) {
+            let data = null;
+            try {
+                data = await fetchFundInfoForListJSONP(code);
+            } catch (err) {
+                data = await fetchFundInfoFromHistoryForAdd(code);
+            }
+
+            if (data && (data.name || data.netValue)) {
                 validCodes.push(code);
                 existingCodes.add(code);
             } else {
@@ -1150,6 +1155,33 @@ function fetchFundInfoFromHistory(code) {
                 scale: '-',
                 establishDate: '-'
             }));
+        } else {
+            throw new Error('未找到该基金，请检查基金代码');
+        }
+    });
+}
+
+function fetchFundInfoFromHistoryForAdd(code) {
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - 7);
+
+    const formatDate = (date) => {
+        return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    };
+
+    const url = `https://fund.eastmoney.com/f10/F10DataApi.aspx?type=lsjz&code=${code}&page=1&sdate=${formatDate(startDate)}&edate=${formatDate(endDate)}&per=10`;
+
+    return eastMoneyApiRequest(url, 5000).then(content => {
+        const data = parseNetValueData(content);
+        if (data.length > 0) {
+            const latest = data[data.length - 1];
+            return {
+                code: code,
+                name: `基金${code}`,
+                netValue: latest.value.toString(),
+                netValueDate: latest.date
+            };
         } else {
             throw new Error('未找到该基金，请检查基金代码');
         }
