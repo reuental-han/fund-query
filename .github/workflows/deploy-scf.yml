@@ -1,0 +1,37 @@
+name: Deploy to Tencent SCF
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: |
+          pip install -r scf_requirements.txt -t .
+
+      - name: Package for SCF
+        run: |
+          zip -r scf_code.zip . -x "*.git*" -x "*.github*" -x "*.pyc" -x "__pycache__/*"
+
+      - name: Deploy to Tencent SCF
+        uses: TencentCloud/scf-action@v1
+        with:
+          secret_id: ${{ secrets.TENCENT_SECRET_ID }}
+          secret_key: ${{ secrets.TENCENT_SECRET_KEY }}
+          region: ap-guangzhou
+          function_name: fund-query-api
+          handler: scf_handler.main_handler
+          runtime: Python3.9
+          zip_file: scf_code.zip
