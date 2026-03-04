@@ -483,55 +483,12 @@ async function fetchFundInfoForList(code, item, shares = null) {
         }
 
         updateMarketValue(item, shares);
-
-        const dividendEl = item.querySelector('.fund-item-dividend');
-        dividendEl.textContent = '查询中...';
-        dividendEl.classList.add('querying');
-
-        fetchDividendDateWithRetry(code).then(dividendDate => {
-            dividendEl.classList.remove('querying');
-            if (dividendDate) {
-                dividendEl.textContent = dividendDate;
-            } else {
-                dividendEl.textContent = '暂无分红';
-            }
-        }).catch(err => {
-            console.warn(`Failed to fetch dividend for ${code}:`, err);
-            dividendEl.classList.remove('querying');
-            dividendEl.textContent = '暂无分红';
-        });
     } catch (err) {
         console.warn(`Failed to fetch fund info for ${code}:`, err);
         item.classList.remove('loading');
         item.querySelector('.fund-item-name').textContent = '获取失败';
         item.querySelector('.fund-item-name').style.color = '#e53e3e';
     }
-}
-
-const API_BASE = 'https://1342955257-84iuimb65s.ap-beijing.tencentscf.com';
-const MAX_RETRIES = 3;
-const RETRY_DELAY = 1000;
-
-async function fetchDividendDateWithRetry(code, retries = MAX_RETRIES) {
-    for (let attempt = 0; attempt < retries; attempt++) {
-        try {
-            const response = await fetch(`${API_BASE}/api/fund/dividend/${code}`);
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
-            }
-            const result = await response.json();
-            if (result.success && result.dividendDate) {
-                return result.dividendDate;
-            }
-            return null;
-        } catch (err) {
-            console.warn(`Dividend fetch attempt ${attempt + 1} failed for ${code}:`, err);
-            if (attempt < retries - 1) {
-                await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * (attempt + 1)));
-            }
-        }
-    }
-    return null;
 }
 
 function fetchFundInfoForListJSONP(code) {
