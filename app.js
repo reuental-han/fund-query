@@ -3,6 +3,56 @@ let chart = null;
 let draggedItem = null;
 
 const STORAGE_KEY = 'fund_query_data';
+
+const DebugLogger = {
+    logs: [],
+    maxLogs: 500,
+
+    getTimestamp() {
+        const now = new Date();
+        return now.toTimeString().split(' ')[0] + '.' + String(now.getMilliseconds()).padStart(3, '0');
+    },
+
+    log(type, message, data = null) {
+        const entry = {
+            time: this.getTimestamp(),
+            type,
+            message,
+            data
+        };
+        this.logs.push(entry);
+        if (this.logs.length > this.maxLogs) {
+            this.logs.shift();
+        }
+        console.log(`[${entry.time}] [${type}] ${message}`, data || '');
+    },
+
+    info(message, data) { this.log('INFO', message, data); },
+    success(message, data) { this.log('SUCCESS', message, data); },
+    error(message, data) { this.log('ERROR', message, data); },
+    warn(message, data) { this.log('WARN', message, data); },
+
+    clear() { this.logs = []; },
+
+    exportToString() {
+        return this.logs.map(l => {
+            let line = `[${l.time}] [${l.type}] ${l.message}`;
+            if (l.data) line += ` | ${JSON.stringify(l.data)}`;
+            return line;
+        }).join('\n');
+    },
+
+    download(filename = 'fund-query-log.txt') {
+        const content = this.exportToString();
+        const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
+    }
+};
 const RECORD_KEY = 'fund_record_point';
 
 function jsonpRequest(url, callbackName, timeout = 8000) {
@@ -197,6 +247,14 @@ function updateRecordDateDisplay() {
 
 document.addEventListener('DOMContentLoaded', () => {
     loadSavedFunds();
+
+    const downloadLogBtn = document.getElementById('downloadLogBtn');
+    if (downloadLogBtn) {
+        downloadLogBtn.addEventListener('click', () => {
+            const timestamp = new Date().toISOString().slice(0, 19).replace(/[:-]/g, '');
+            DebugLogger.download(`fund-query-log-${timestamp}.txt`);
+        });
+    }
 });
 
 searchBtn.addEventListener('click', () => searchFund());
@@ -272,9 +330,12 @@ async function loadSavedFunds() {
     fundListHeader.classList.add('hidden');
     refreshAllBtn.disabled = true;
     refreshAllBtn.textContent = '刷新中...';
+    DebugLogger.clear();
+    DebugLogger.info('开始加载基金列表');
 
     try {
         const funds = getStoredFunds();
+        DebugLogger.info('从本地存储读取基金列表', { count: funds.length, funds: funds.map(f => typeof f === 'string' ? f : f.code) });
 
         fundListLoading.classList.add('hidden');
 
@@ -283,6 +344,7 @@ async function loadSavedFunds() {
             refreshAllBtn.disabled = false;
             refreshAllBtn.textContent = '🔄 刷新';
             updateRecordDateDisplay();
+            DebugLogger.info('基金列表为空');
             return;
         }
 
@@ -301,16 +363,38 @@ async function loadSavedFunds() {
         }
 
         const BATCH_SIZE = 5;
+        const totalBatches = Math.ceil(items.length / BATCH_SIZE);
+        DebugLogger.info('开始分批查询', { totalFunds: items.length, batchSize: BATCH_SIZE, totalBatches });
+
         for (let i = 0; i < items.length; i += BATCH_SIZE) {
+            const batchNum = Math.floor(i / BATCH_SIZE) + 1;
             const batch = items.slice(i, i + BATCH_SIZE);
-            await Promise.all(batch.map(({ code, item, shares }) =>
-                fetchFundInfoForList(code, item, shares).then(() => updateProgress())
+            const batchCodes = batch.map(b => b.code);
+            const batchStartTime = Date.now();
+            DebugLogger.info(`批次 ${batchNum}/${totalBatches} 开始查询`, { codes: batchCodes });
+
+            const results = await Promise.allSettled(batch.map(({ code, item, shares }) =>
+                fetchFundInfoForList(code, item, shares).then(data => ({ code, data })).catch(err => ({ code, error: err.message }))
             ));
+
+            const batchEndTime = Date.now();
+            results.forEach(r => {
+                if (r.status === 'fulfilled' && r.value.data) {
+                    DebugLogger.success(`基金 ${r.value.code} 查询成功`, { name: r.value.data.name || r.value.code });
+                } else {
+                    const errMsg = r.status === 'rejected' ? r.reason?.message : r.value?.error;
+                    DebugLogger.error(`基金 ${r.value?.code || 'unknown'} 查询失败`, { error: errMsg });
+                }
+            });
+
+            DebugLogger.info(`批次 ${batchNum}/${totalBatches} 完成`, { duration: batchEndTime - batchStartTime + 'ms', codes: batchCodes });
+            updateProgress();
         }
 
         hideProgress();
         refreshAllBtn.disabled = false;
         refreshAllBtn.textContent = '🔄 刷新';
+        DebugLogger.info('基金列表加载完成');
 
     } catch (err) {
         hideProgress();
@@ -318,6 +402,7 @@ async function loadSavedFunds() {
         fundList.innerHTML = '<div class="empty-tip">加载失败，请刷新重试</div>';
         refreshAllBtn.disabled = false;
         refreshAllBtn.textContent = '🔄 刷新';
+        DebugLogger.error('基金列表加载异常', { error: err.message, stack: err.stack });
     }
 }
 
