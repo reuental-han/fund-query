@@ -272,12 +272,12 @@ async function loadSavedFunds() {
     fundListHeader.classList.add('hidden');
     refreshAllBtn.disabled = true;
     refreshAllBtn.textContent = '刷新中...';
-    
+
     try {
         const funds = getStoredFunds();
-        
+
         fundListLoading.classList.add('hidden');
-        
+
         if (funds.length === 0) {
             fundList.innerHTML = '<div class="empty-tip">暂无保存的基金，请添加基金代码</div>';
             refreshAllBtn.disabled = false;
@@ -285,12 +285,12 @@ async function loadSavedFunds() {
             updateRecordDateDisplay();
             return;
         }
-        
+
         fundListHeader.classList.remove('hidden');
         updateRecordDateDisplay();
-        
+
         showProgress(funds.length);
-        
+
         const items = [];
         for (const fundData of funds) {
             const code = typeof fundData === 'string' ? fundData : fundData.code;
@@ -299,15 +299,19 @@ async function loadSavedFunds() {
             fundList.appendChild(item);
             items.push({ code, item, shares });
         }
-        
-        for (const { code, item, shares } of items) {
-            await fetchFundInfoForListWithProgress(code, item, shares);
+
+        const BATCH_SIZE = 5;
+        for (let i = 0; i < items.length; i += BATCH_SIZE) {
+            const batch = items.slice(i, i + BATCH_SIZE);
+            await Promise.all(batch.map(({ code, item, shares }) =>
+                fetchFundInfoForList(code, item, shares).then(() => updateProgress())
+            ));
         }
-        
+
         hideProgress();
         refreshAllBtn.disabled = false;
         refreshAllBtn.textContent = '🔄 刷新';
-        
+
     } catch (err) {
         hideProgress();
         fundListLoading.classList.add('hidden');
