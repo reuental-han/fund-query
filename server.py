@@ -1,29 +1,30 @@
-from flask import Flask, send_from_directory, jsonify
+from flask import Flask, send_file, jsonify
 import os
-import logging
-
-logging.basicConfig(level=logging.DEBUG)
-logger = logging.getLogger(__name__)
+from pathlib import Path
 
 app = Flask(__name__, static_folder='.')
 
 @app.route('/')
 def index():
     try:
-        return send_from_directory('.', 'index.html')
+        return send_file('index.html', mimetype='text/html')
     except Exception as e:
-        logger.error(f"Error serving index.html: {e}")
         return jsonify({"error": str(e)}), 500
 
 @app.route('/<path:filename>')
 def serve_static(filename):
     try:
-        return send_from_directory('.', filename)
+        file_path = Path(filename)
+        if '..' in str(file_path) or str(file_path).startswith('/'):
+            return jsonify({"error": "Invalid path"}), 400
+        
+        if file_path.exists() and file_path.is_file():
+            return send_file(str(file_path))
+        else:
+            return jsonify({"error": "File not found"}), 404
     except Exception as e:
-        logger.error(f"Error serving {filename}: {e}")
-        return jsonify({"error": str(e)}), 404
+        return jsonify({"error": str(e)}), 500
 
-@app.errorhandler(500)
-def handle_500(error):
-    logger.error(f"500 Error: {error}")
-    return jsonify({"error": "Internal Server Error"}), 500
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port)
