@@ -421,7 +421,7 @@ function createFundItem(code, shares = null) {
         <div class="fund-item-dividend">-</div>
         <div class="fund-item-actions">
             <button class="fund-item-refresh" title="刷新">↻</button>
-            <button class="fund-item-edit" title="编辑份额">编辑</button>
+            <button class="fund-item-edit" title="编辑份额">✏️</button>
             <button class="fund-item-delete" title="删除">×</button>
         </div>
     `;
@@ -542,10 +542,14 @@ async function fetchFundInfoForList(code, item, shares = null) {
         item.classList.remove('loading');
         item.dataset.netValue = data.netValue || '';
 
+        const nameEl = item.querySelector('.fund-item-name');
+        nameEl.classList.remove('querying');
+        nameEl.style.color = '';
+
         if (data.name) {
-            item.querySelector('.fund-item-name').textContent = data.name;
+            nameEl.textContent = data.name;
         } else {
-            item.querySelector('.fund-item-name').textContent = `基金${code}`;
+            nameEl.textContent = `基金${code}`;
         }
 
         item.querySelector('.fund-item-date').textContent = data.netValueDate || '-';
