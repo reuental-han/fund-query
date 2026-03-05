@@ -1,1 +1,1 @@
-web: gunicorn -c gunicorn.conf.py server:app
+web: bash start.sh
