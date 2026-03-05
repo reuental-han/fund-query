@@ -414,6 +414,40 @@ header h1 {
     color: #e53e3e;
 }
 
+.fund-item-refresh {
+    background: none;
+    border: none;
+    color: #667eea;
+    cursor: pointer;
+    font-size: 1.1rem;
+    padding: 5px;
+    transition: color 0.2s, transform 0.3s;
+}
+
+.fund-item-refresh:hover {
+    color: #5a6fd6;
+}
+
+.fund-item-refresh.spinning {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.fund-item-name.querying {
+    color: #999;
+    font-style: italic;
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
 .fund-item-shares {
     font-size: 0.9rem;
     color: #1a1a2e;

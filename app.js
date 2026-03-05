@@ -351,8 +351,6 @@ async function loadSavedFunds() {
         fundListHeader.classList.remove('hidden');
         updateRecordDateDisplay();
 
-        showProgress(funds.length);
-
         const items = [];
         for (const fundData of funds) {
             const code = typeof fundData === 'string' ? fundData : fundData.code;
@@ -362,42 +360,32 @@ async function loadSavedFunds() {
             items.push({ code, item, shares });
         }
 
-        const BATCH_SIZE = 5;
-        const totalBatches = Math.ceil(items.length / BATCH_SIZE);
-        DebugLogger.info('开始分批查询', { totalFunds: items.length, batchSize: BATCH_SIZE, totalBatches });
+        DebugLogger.info('开始串联查询', { totalFunds: items.length, timeout: 3000, delay: 500 });
 
-        for (let i = 0; i < items.length; i += BATCH_SIZE) {
-            const batchNum = Math.floor(i / BATCH_SIZE) + 1;
-            const batch = items.slice(i, i + BATCH_SIZE);
-            const batchCodes = batch.map(b => b.code);
-            const batchStartTime = Date.now();
-            DebugLogger.info(`批次 ${batchNum}/${totalBatches} 开始查询`, { codes: batchCodes });
+        for (let i = 0; i < items.length; i++) {
+            const { code, item, shares } = items[i];
+            const queryStartTime = Date.now();
+            DebugLogger.info(`开始查询第 ${i + 1}/${items.length} 支基金`, { code });
 
-            const results = await Promise.allSettled(batch.map(({ code, item, shares }) =>
-                fetchFundInfoForList(code, item, shares).then(data => ({ code, data })).catch(err => ({ code, error: err.message }))
-            ));
+            try {
+                await fetchFundInfoForListWithTimeout(code, item, shares, 3000);
+                const queryEndTime = Date.now();
+                DebugLogger.success(`基金 ${code} 查询成功`, { duration: queryEndTime - queryStartTime + 'ms' });
+            } catch (err) {
+                const queryEndTime = Date.now();
+                DebugLogger.error(`基金 ${code} 查询失败`, { error: err.message, duration: queryEndTime - queryStartTime + 'ms' });
+            }
 
-            const batchEndTime = Date.now();
-            results.forEach(r => {
-                if (r.status === 'fulfilled' && r.value.data) {
-                    DebugLogger.success(`基金 ${r.value.code} 查询成功`, { name: r.value.data.name || r.value.code });
-                } else {
-                    const errMsg = r.status === 'rejected' ? r.reason?.message : r.value?.error;
-                    DebugLogger.error(`基金 ${r.value?.code || 'unknown'} 查询失败`, { error: errMsg });
-                }
-            });
-
-            DebugLogger.info(`批次 ${batchNum}/${totalBatches} 完成`, { duration: batchEndTime - batchStartTime + 'ms', codes: batchCodes });
-            updateProgress();
+            if (i < items.length - 1) {
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
         }
 
-        hideProgress();
         refreshAllBtn.disabled = false;
         refreshAllBtn.textContent = '🔄 刷新';
         DebugLogger.info('基金列表加载完成');
 
     } catch (err) {
-        hideProgress();
         fundListLoading.classList.add('hidden');
         fundList.innerHTML = '<div class="empty-tip">加载失败，请刷新重试</div>';
         refreshAllBtn.disabled = false;
@@ -432,6 +420,7 @@ function createFundItem(code, shares = null) {
         <div class="fund-item-record-value">-</div>
         <div class="fund-item-dividend">-</div>
         <div class="fund-item-actions">
+            <button class="fund-item-refresh" title="刷新">↻</button>
             <button class="fund-item-edit" title="编辑份额">编辑</button>
             <button class="fund-item-delete" title="删除">×</button>
         </div>
@@ -440,6 +429,12 @@ function createFundItem(code, shares = null) {
     item.querySelector('.fund-item-name').addEventListener('click', () => {
         fundInput.value = code;
         searchFund();
+    });
+
+    const refreshBtn = item.querySelector('.fund-item-refresh');
+    refreshBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        refreshSingleFund(item, code);
     });
     
     const editBtn = item.querySelector('.fund-item-edit');
@@ -542,7 +537,7 @@ async function saveFundsOrder() {
 
 async function fetchFundInfoForList(code, item, shares = null) {
     try {
-        const data = await fetchFundInfoForListJSONP(code);
+        const data = await fetchFundInfoForListJSONP(code, 3000);
 
         item.classList.remove('loading');
         item.dataset.netValue = data.netValue || '';
@@ -576,11 +571,61 @@ async function fetchFundInfoForList(code, item, shares = null) {
     }
 }
 
-function fetchFundInfoForListJSONP(code) {
+async function fetchFundInfoForListWithTimeout(code, item, shares = null, timeout = 3000) {
+    item.classList.add('loading');
+    item.querySelector('.fund-item-name').textContent = '查询中...';
+    item.querySelector('.fund-item-name').classList.add('querying');
+
+    try {
+        let data = null;
+        
+        try {
+            data = await fetchFundInfoForListJSONP(code, timeout);
+        } catch (err) {
+            data = await fetchFundInfoFromHistoryForAdd(code);
+        }
+
+        if (!data) {
+            throw new Error('API返回空数据');
+        }
+
+        item.classList.remove('loading', 'querying');
+        item.dataset.netValue = data.netValue || '';
+
+        if (data.name) {
+            item.querySelector('.fund-item-name').textContent = data.name;
+        } else {
+            item.querySelector('.fund-item-name').textContent = `基金${code}`;
+        }
+
+        item.querySelector('.fund-item-date').textContent = data.netValueDate || '-';
+
+        const valueEl = item.querySelector('.fund-item-value');
+        valueEl.textContent = data.netValue || '-';
+
+        const growth = parseFloat(data.dayGrowth);
+        if (!isNaN(growth)) {
+            if (growth >= 0) {
+                valueEl.classList.add('up');
+            } else {
+                valueEl.classList.add('down');
+            }
+        }
+
+        updateMarketValue(item, shares);
+    } catch (err) {
+        console.warn(`Failed to fetch fund info for ${code}:`, err);
+        item.classList.remove('loading', 'querying');
+        item.querySelector('.fund-item-name').textContent = '获取失败';
+        item.querySelector('.fund-item-name').style.color = '#e53e3e';
+    }
+}
+
+function fetchFundInfoForListJSONP(code, timeout = 8000) {
     return jsonpRequest(
         `https://fundgz.1234567.com.cn/js/${code}.js`,
         'jsonpgz',
-        8000
+        timeout
     ).then(data => {
         if (data && data.fundcode) {
             return {
@@ -1035,6 +1080,28 @@ function showAddFundError(message) {
 
 function showAddFundSuccess(message) {
     showAddFundStatus('success', message);
+}
+
+async function refreshSingleFund(item, code) {
+    const funds = getStoredFunds();
+    const fundData = funds.find(f => (typeof f === 'string' ? f : f.code) === code);
+    const shares = typeof fundData === 'object' ? fundData.shares : null;
+
+    const refreshBtn = item.querySelector('.fund-item-refresh');
+    refreshBtn.disabled = true;
+    refreshBtn.classList.add('spinning');
+
+    DebugLogger.info('刷新单支基金', { code });
+
+    try {
+        await fetchFundInfoForListWithTimeout(code, item, shares, 3000);
+        DebugLogger.success('基金刷新成功', { code });
+    } catch (err) {
+        DebugLogger.error('基金刷新失败', { code, error: err.message });
+    }
+
+    refreshBtn.disabled = false;
+    refreshBtn.classList.remove('spinning');
 }
 
 async function removeFund(code) {
