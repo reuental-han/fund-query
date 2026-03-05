@@ -377,7 +377,7 @@ async function loadSavedFunds() {
             }
 
             if (i < items.length - 1) {
-                await new Promise(resolve => setTimeout(resolve, 500));
+                await new Promise(resolve => setTimeout(resolve, 200));
             }
         }
 
@@ -590,6 +590,7 @@ async function fetchFundInfoForListWithTimeout(code, item, shares = null, timeou
         }
 
         item.classList.remove('loading', 'querying');
+        item.querySelector('.fund-item-name').style.color = '';
         item.dataset.netValue = data.netValue || '';
 
         if (data.name) {
