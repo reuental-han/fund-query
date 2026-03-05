@@ -1,1 +1,1 @@
-web: bash start.sh
+web: waitress-serve --port=$PORT server:app
