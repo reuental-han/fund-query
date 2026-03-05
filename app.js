@@ -1089,6 +1089,8 @@ function showAddFundSuccess(message) {
 
 async function searchFund() {
     const code = fundInput.value.trim();
+    DebugLogger.info('基金查询功能开始', { code });
+
     if (!code || code.length !== 6 || !/^\d+$/.test(code)) {
         showError('请输入正确的6位基金代码');
         return;
@@ -1101,15 +1103,25 @@ async function searchFund() {
         let fundData = null;
         
         try {
+            DebugLogger.info('尝试使用 fundgz API 查询', { code, timeout: 3000 });
+            const startTime = Date.now();
             fundData = await fetchFundInfo(code);
+            const endTime = Date.now();
+            DebugLogger.success('fundgz API 查询成功', { code, name: fundData.name, duration: endTime - startTime + 'ms' });
         } catch (err) {
+            DebugLogger.warn('fundgz API 查询失败，准备使用备用API', { code, error: err.message });
+            const startTime = Date.now();
             fundData = await fetchFundInfoFromHistory(code);
+            const endTime = Date.now();
+            DebugLogger.success('备用API(history)查询成功', { code, name: fundData.name, duration: endTime - startTime + 'ms' });
         }
         
         displayFundInfo(fundData);
         await loadChart(code, '1m');
         showResult();
+        DebugLogger.info('基金查询功能完成', { code });
     } catch (err) {
+        DebugLogger.error('基金查询功能异常', { code, error: err.message });
         showError(err.message);
     }
 }
